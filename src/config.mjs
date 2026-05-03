@@ -1,0 +1,24 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+export const config = {
+  rootDir,
+  port: Number(process.env.PORT || 8787),
+  dataDir: path.join(rootDir, 'data'),
+  publicDir: path.join(rootDir, 'public'),
+  ollama: {
+    localUrl: process.env.OLLAMA_URL || 'http://127.0.0.1:11434',
+    localVisionModel: process.env.OLLAMA_VISION_MODEL || 'moondream',
+    cloudUrl: process.env.OLLAMA_CLOUD_URL || 'https://ollama.com/v1',
+    cloudVisionModel: process.env.OLLAMA_CLOUD_VISION_MODEL || 'gemma4:31b',
+    cloudReportModel: process.env.OLLAMA_CLOUD_MODEL || 'deepseek-v4-pro',
+    apiKey: process.env.OLLAMA_API_KEY || ''
+  }
+};
+
+export const paths = {
+  framesDir: path.join(config.dataDir, 'frames'),
+  reportsDir: path.join(config.dataDir, 'reports')
+};
