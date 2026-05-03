@@ -2,6 +2,13 @@
 
 古いスマホをペットカメラ化し、定期キャプチャから「ペット日報」を作る最小プロトタイプ。
 
+## Tech stack
+
+- Hono
+- TypeScript
+- tsx for local dev
+- Ollama Cloud / local Ollama
+
 ## Run
 
 ```bash
@@ -62,15 +69,15 @@ PORT=8787
 ## Project structure
 
 ```text
-server.mjs                 HTTP entrypoint
-src/config.mjs             environment/path config
-src/frame-service.mjs      capture persistence
-src/report-service.mjs     metrics + report generation
-src/ollama-client.mjs      Ollama Cloud/local clients
-src/static-files.mjs       static file serving
-src/http-utils.mjs         request/response helpers
-src/time.mjs               JST date helpers
-src/json-store.mjs         JSON/file helpers
+server.ts                  Hono HTTP entrypoint
+src/config.ts              environment/path config
+src/frame-service.ts       capture persistence
+src/report-service.ts      metrics + report generation
+src/ollama-client.ts       Ollama Cloud/local clients
+src/static-files.ts        static file serving
+src/time.ts                JST date helpers
+src/json-store.ts          JSON/file helpers
+src/types.ts               shared domain types
 public/                    browser UI
 docs/                      product notes
 ```

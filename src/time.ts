@@ -1,4 +1,4 @@
-export function todayJst(date = new Date()) {
+export function todayJst(date = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',
@@ -7,7 +7,7 @@ export function todayJst(date = new Date()) {
   }).format(date);
 }
 
-export function timestampJst(date = new Date()) {
+export function timestampJst(date = new Date()): string {
   return new Intl.DateTimeFormat('sv-SE', {
     timeZone: 'Asia/Tokyo',
     year: 'numeric',

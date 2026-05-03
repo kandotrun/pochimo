@@ -1,7 +1,9 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { fileExists, readJson, writeJson } from './json-store.mjs';
-import { todayJst } from './time.mjs';
+import { fileExists, readJson, writeJson } from './json-store.js';
+import { todayJst } from './time.js';
+import type { CaptureEvent, Observation, Report } from './types.js';
+import type { OllamaClient } from './ollama-client.js';
 
 const NEXT_CHECKS = [
   '水飲み場・ごはん場・トイレなどの注目エリアを指定できるようにする',
@@ -9,25 +11,33 @@ const NEXT_CHECKS = [
   '夜1回、自動でLINE/Slack/メールに送る'
 ];
 
-export class ReportService {
-  constructor({ rootDir, dataDir, reportsDir, aiClient }) {
-    this.rootDir = rootDir;
-    this.dataDir = dataDir;
-    this.reportsDir = reportsDir;
-    this.aiClient = aiClient;
-  }
+type ReportMetrics = {
+  activeFrames: number;
+  topActiveHours: Report['topActiveHours'];
+  quietPeriods: Report['quietPeriods'];
+};
 
-  async createReport(date = todayJst(), { useAi = true } = {}) {
-    const events = await this.#readEvents(date);
-    const metrics = this.#buildMetrics(events);
-    const ai = useAi && events.length > 0
-      ? await this.#analyzeRepresentativeFrames(events)
+export class ReportService {
+  constructor(
+    private readonly options: {
+      rootDir: string;
+      dataDir: string;
+      reportsDir: string;
+      aiClient: OllamaClient;
+    }
+  ) {}
+
+  async createReport(date = todayJst(), { useAi = true }: { useAi?: boolean } = {}): Promise<{ report: Report; markdown: string }> {
+    const events = await this.readEvents(date);
+    const metrics = this.buildMetrics(events);
+    const ai: Observation = useAi && events.length > 0
+      ? await this.analyzeRepresentativeFrames(events)
       : { enabled: false, summary: 'AI解析は未実行です。' };
 
-    const report = this.#buildReport({ date, events, metrics, ai });
-    const fallbackMarkdown = this.#renderFallbackMarkdown(report);
+    const report = this.buildReport({ date, events, metrics, ai });
+    const fallbackMarkdown = this.renderFallbackMarkdown(report);
     const cloud = useAi
-      ? await this.aiClient.polishReport({ report, fallbackMarkdown })
+      ? await this.options.aiClient.polishReport({ report, fallbackMarkdown })
       : { enabled: false, markdown: fallbackMarkdown };
 
     report.cloud = {
@@ -37,19 +47,19 @@ export class ReportService {
     };
 
     const markdown = cloud.markdown || fallbackMarkdown;
-    await writeJson(path.join(this.reportsDir, `${date}.json`), report);
-    await fs.writeFile(path.join(this.reportsDir, `${date}.md`), markdown);
+    await writeJson(path.join(this.options.reportsDir, `${date}.json`), report);
+    await fs.writeFile(path.join(this.options.reportsDir, `${date}.md`), markdown);
 
     return { report, markdown };
   }
 
-  async #readEvents(date) {
-    return readJson(path.join(this.dataDir, `${date}.events.json`), []);
+  private async readEvents(date: string): Promise<CaptureEvent[]> {
+    return readJson<CaptureEvent[]>(path.join(this.options.dataDir, `${date}.events.json`), []);
   }
 
-  #buildMetrics(events) {
+  private buildMetrics(events: CaptureEvent[]): ReportMetrics {
     const motionEvents = events.filter(event => event.motionScore >= 8);
-    const activeByHour = new Map();
+    const activeByHour = new Map<string, number>();
 
     for (const event of motionEvents) {
       const hour = event.time.slice(11, 13);
@@ -62,13 +72,13 @@ export class ReportService {
         .sort((a, b) => b[1] - a[1])
         .slice(0, 4)
         .map(([hour, count]) => ({ hour: `${hour}:00`, count })),
-      quietPeriods: this.#findQuietPeriods(events).slice(0, 5)
+      quietPeriods: this.findQuietPeriods(events).slice(0, 5)
     };
   }
 
-  #findQuietPeriods(events) {
-    const quietPeriods = [];
-    let runStart = null;
+  private findQuietPeriods(events: CaptureEvent[]): Report['quietPeriods'] {
+    const quietPeriods: Report['quietPeriods'] = [];
+    let runStart: CaptureEvent | null = null;
 
     for (const event of events) {
       const quiet = event.motionScore < 3;
@@ -79,14 +89,14 @@ export class ReportService {
       }
     }
 
-    if (runStart && events.at(-1)) quietPeriods.push({ from: runStart.time, to: events.at(-1).time });
+    if (runStart && events.at(-1)) quietPeriods.push({ from: runStart.time, to: events.at(-1)!.time });
     return quietPeriods;
   }
 
-  async #analyzeRepresentativeFrames(events) {
-    const images = [];
+  private async analyzeRepresentativeFrames(events: CaptureEvent[]): Promise<Observation> {
+    const images: string[] = [];
     for (const event of pickRepresentativeEvents(events)) {
-      const imagePath = path.join(this.rootDir, event.file);
+      const imagePath = path.join(this.options.rootDir, event.file);
       if (await fileExists(imagePath)) {
         images.push((await fs.readFile(imagePath)).toString('base64'));
       }
@@ -96,10 +106,10 @@ export class ReportService {
       return { enabled: false, summary: '保存画像が見つかりません。' };
     }
 
-    return this.aiClient.analyzeImages(images);
+    return this.options.aiClient.analyzeImages(images);
   }
 
-  #buildReport({ date, events, metrics, ai }) {
+  private buildReport({ date, events, metrics, ai }: { date: string; events: CaptureEvent[]; metrics: ReportMetrics; ai: Observation }): Report {
     return {
       date,
       capturedFrames: events.length,
@@ -114,17 +124,17 @@ export class ReportService {
     };
   }
 
-  #renderFallbackMarkdown(report) {
+  private renderFallbackMarkdown(report: Report): string {
     return `# ペット日報 ${report.date}\n\n${report.summary}\n\n${renderAiSection(report.ai)}\n## 活動が多かった時間\n${renderActiveHours(report.topActiveHours)}\n\n## 静かだった時間候補\n${renderQuietPeriods(report.quietPeriods)}\n\n## 次に見ること\n${report.nextChecks.map(item => `- ${item}`).join('\n')}\n`;
   }
 }
 
-function pickRepresentativeEvents(events) {
+function pickRepresentativeEvents(events: CaptureEvent[]): CaptureEvent[] {
   if (events.length === 0) return [];
 
   const mostActive = [...events].sort((a, b) => b.motionScore - a.motionScore)[0];
-  const picks = [events[0], mostActive, events.at(-1)].filter(Boolean);
-  const seen = new Set();
+  const picks = [events[0], mostActive, events.at(-1)].filter((event): event is CaptureEvent => Boolean(event));
+  const seen = new Set<string>();
 
   return picks.filter(event => {
     if (seen.has(event.file)) return false;
@@ -133,23 +143,23 @@ function pickRepresentativeEvents(events) {
   }).slice(0, 3);
 }
 
-function renderAiSection(ai) {
+function renderAiSection(ai: Observation): string {
   if (!ai.enabled) return `## Ollama画像解析\n- ${ai.summary || '未実行'}\n`;
 
   return `## Ollama画像解析（${ai.model}）\n- ペットが見える: ${ai.petVisible === true ? 'はい' : ai.petVisible === false ? 'いいえ' : '不明'}\n- 場面: ${ai.scene || '不明'}\n- 様子: ${ai.petActivity || '不明'}\n\n### 気になる点\n${renderList(ai.concerns, '特になし/判定困難')}\n\n### 飼い主が確認するとよいこと\n${renderList(ai.ownerChecks, '画角と明るさを確認')}\n`;
 }
 
-function renderActiveHours(hours) {
+function renderActiveHours(hours: Report['topActiveHours']): string {
   if (!hours.length) return '- まだ十分な動きデータがありません';
   return hours.map(item => `- ${item.hour}ごろ: ${item.count}回`).join('\n');
 }
 
-function renderQuietPeriods(periods) {
+function renderQuietPeriods(periods: Report['quietPeriods']): string {
   if (!periods.length) return '- まだ判定できません';
   return periods.map(item => `- ${item.from.slice(11, 16)}〜${item.to.slice(11, 16)}`).join('\n');
 }
 
-function renderList(items, fallback) {
+function renderList(items: string[] | undefined, fallback: string): string {
   if (!Array.isArray(items) || items.length === 0) return `- ${fallback}`;
   return items.map(item => `- ${item}`).join('\n');
 }

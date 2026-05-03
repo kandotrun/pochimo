@@ -1,3 +1,5 @@
+import type { CloudPolishResult, Observation, Report } from './types.js';
+
 const OBSERVATION_PROMPT = `あなたはペット見守り日報AIです。画像は室内に置いたスマホカメラの代表フレームです。
 
 必ず日本語で、医療診断はせず、観察できる事実だけを書いてください。
@@ -10,16 +12,46 @@ const OBSERVATION_PROMPT = `あなたはペット見守り日報AIです。画�
   "ownerChecks": ["飼い主が確認するとよいこと"]
 }`;
 
-function extractJson(raw) {
+type ChatMessage = {
+  role: 'system' | 'user' | 'assistant';
+  content: string | Array<{ type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }>;
+};
+
+type ChatPayload = {
+  model: string;
+  messages: ChatMessage[];
+  response_format?: { type: 'json_object' };
+  temperature?: number;
+  max_tokens?: number;
+};
+
+type ChatResponse = {
+  choices?: Array<{ message?: { content?: string } }>;
+};
+
+type LocalGenerateResponse = {
+  response?: string;
+};
+
+type OllamaOptions = {
+  localUrl: string;
+  localVisionModel: string;
+  cloudUrl: string;
+  cloudVisionModel: string;
+  cloudReportModel: string;
+  apiKey: string;
+};
+
+function extractJson(raw: string): unknown {
   const text = String(raw || '').trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const jsonText = fenced || text.match(/\{[\s\S]*\}/)?.[0] || text;
   return JSON.parse(jsonText);
 }
 
-function safeObservationParse(raw, fallbackConcern) {
+function safeObservationParse(raw: string, fallbackConcern: string): Partial<Observation> {
   try {
-    return extractJson(raw);
+    return extractJson(raw) as Partial<Observation>;
   } catch {
     return {
       petVisible: null,
@@ -32,33 +64,26 @@ function safeObservationParse(raw, fallbackConcern) {
 }
 
 export class OllamaClient {
-  constructor(options) {
-    this.localUrl = options.localUrl;
-    this.localVisionModel = options.localVisionModel;
-    this.cloudUrl = options.cloudUrl;
-    this.cloudVisionModel = options.cloudVisionModel;
-    this.cloudReportModel = options.cloudReportModel;
-    this.apiKey = options.apiKey;
-  }
+  constructor(private readonly options: OllamaOptions) {}
 
-  async analyzeImages(images) {
+  async analyzeImages(images: string[]): Promise<Observation> {
     if (images.length === 0) {
-      return { enabled: false, model: this.cloudVisionModel, summary: '解析対象の画像がありません。' };
+      return { enabled: false, model: this.options.cloudVisionModel, summary: '解析対象の画像がありません。' };
     }
 
-    if (this.apiKey) {
-      const cloud = await this.#tryCloudVision(images);
+    if (this.options.apiKey) {
+      const cloud = await this.tryCloudVision(images);
       if (cloud) return cloud;
     }
 
-    return this.#localVision(images);
+    return this.localVision(images);
   }
 
-  async polishReport({ report, fallbackMarkdown }) {
-    if (!this.apiKey || report.capturedFrames === 0) {
+  async polishReport({ report, fallbackMarkdown }: { report: Report; fallbackMarkdown: string }): Promise<CloudPolishResult> {
+    if (!this.options.apiKey || report.capturedFrames === 0) {
       return {
         enabled: false,
-        model: this.cloudReportModel,
+        model: this.options.cloudReportModel,
         markdown: fallbackMarkdown,
         summary: 'Ollama Cloud API key未設定または画像なし'
       };
@@ -80,8 +105,8 @@ ${JSON.stringify(report, null, 2)}
 ${fallbackMarkdown}`;
 
     try {
-      const data = await this.#chatCompletions({
-        model: this.cloudReportModel,
+      const data = await this.chatCompletions({
+        model: this.options.cloudReportModel,
         messages: [
           { role: 'system', content: 'あなたはペット見守り日報を書くAIです。観察事実をやさしく、ただし断定しすぎず整理します。' },
           { role: 'user', content: prompt }
@@ -92,26 +117,26 @@ ${fallbackMarkdown}`;
 
       const markdown = data.choices?.[0]?.message?.content?.trim();
       if (!markdown) throw new Error('empty response');
-      return { enabled: true, model: this.cloudReportModel, markdown };
+      return { enabled: true, model: this.options.cloudReportModel, markdown };
     } catch (err) {
       return {
         enabled: false,
-        model: this.cloudReportModel,
+        model: this.options.cloudReportModel,
         markdown: fallbackMarkdown,
-        summary: `Ollama Cloud整形に失敗: ${err.message}`
+        summary: `Ollama Cloud整形に失敗: ${err instanceof Error ? err.message : String(err)}`
       };
     }
   }
 
-  async #tryCloudVision(images) {
+  private async tryCloudVision(images: string[]): Promise<Observation | null> {
     try {
-      const content = [
+      const content: ChatMessage['content'] = [
         { type: 'text', text: OBSERVATION_PROMPT },
-        ...images.map(image => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }))
+        ...images.map(image => ({ type: 'image_url' as const, image_url: { url: `data:image/jpeg;base64,${image}` } }))
       ];
 
-      const data = await this.#chatCompletions({
-        model: this.cloudVisionModel,
+      const data = await this.chatCompletions({
+        model: this.options.cloudVisionModel,
         messages: [{ role: 'user', content }],
         response_format: { type: 'json_object' },
         temperature: 0.1,
@@ -122,24 +147,24 @@ ${fallbackMarkdown}`;
       return {
         enabled: true,
         provider: 'ollama-cloud',
-        model: this.cloudVisionModel,
+        model: this.options.cloudVisionModel,
         framesAnalyzed: images.length,
         raw: String(raw).trim(),
         ...safeObservationParse(raw, 'Visionモデルの返答がJSONではありませんでした')
       };
     } catch (err) {
-      console.warn(`cloud vision failed; falling back to local ollama: ${err.message}`);
+      console.warn(`cloud vision failed; falling back to local ollama: ${err instanceof Error ? err.message : String(err)}`);
       return null;
     }
   }
 
-  async #localVision(images) {
+  private async localVision(images: string[]): Promise<Observation> {
     try {
-      const response = await fetch(`${this.localUrl}/api/generate`, {
+      const response = await fetch(`${this.options.localUrl}/api/generate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          model: this.localVisionModel,
+          model: this.options.localVisionModel,
           prompt: OBSERVATION_PROMPT,
           images,
           stream: false,
@@ -149,12 +174,12 @@ ${fallbackMarkdown}`;
       });
 
       if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
-      const data = await response.json();
+      const data = (await response.json()) as LocalGenerateResponse;
       const raw = data.response || '';
       return {
         enabled: true,
         provider: 'local-ollama',
-        model: this.localVisionModel,
+        model: this.options.localVisionModel,
         framesAnalyzed: images.length,
         raw: String(raw).trim(),
         ...safeObservationParse(raw, 'Ollamaの返答がJSONではありませんでした')
@@ -162,29 +187,29 @@ ${fallbackMarkdown}`;
     } catch (err) {
       return {
         enabled: false,
-        model: this.localVisionModel,
-        summary: `Ollama解析に失敗: ${err.message}`
+        model: this.options.localVisionModel,
+        summary: `Ollama解析に失敗: ${err instanceof Error ? err.message : String(err)}`
       };
     }
   }
 
-  async #chatCompletions(payload) {
+  private async chatCompletions(payload: ChatPayload): Promise<ChatResponse> {
     const maxAttempts = 3;
-    let lastError;
+    let lastError: unknown;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
-        const response = await fetch(`${this.cloudUrl}/chat/completions`, {
+        const response = await fetch(`${this.options.cloudUrl}/chat/completions`, {
           method: 'POST',
           headers: {
             'content-type': 'application/json',
-            authorization: `Bearer ${this.apiKey}`
+            authorization: `Bearer ${this.options.apiKey}`
           },
           body: JSON.stringify({ ...payload, stream: false }),
           signal: AbortSignal.timeout(120000)
         });
 
-        if (response.ok) return response.json();
+        if (response.ok) return (await response.json()) as ChatResponse;
 
         const errorText = await response.text();
         lastError = new Error(`Ollama Cloud HTTP ${response.status}: ${errorText}`);
@@ -200,6 +225,6 @@ ${fallbackMarkdown}`;
   }
 }
 
-function sleep(ms) {
+function sleep(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms));
 }

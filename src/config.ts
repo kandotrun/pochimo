@@ -16,9 +16,9 @@ export const config = {
     cloudReportModel: process.env.OLLAMA_CLOUD_MODEL || 'deepseek-v4-pro',
     apiKey: process.env.OLLAMA_API_KEY || ''
   }
-};
+} as const;
 
 export const paths = {
   framesDir: path.join(config.dataDir, 'frames'),
   reportsDir: path.join(config.dataDir, 'reports')
-};
+} as const;
