@@ -1,0 +1,20 @@
+# runtime/private data
+data/
+.env
+.env.*
+!.env.example
+
+# dependencies / build
+node_modules/
+dist/
+build/
+.next/
+
+# OS/editor
+.DS_Store
+.vscode/
+.idea/
+
+# logs
+*.log
+npm-debug.log*

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ペット日報AI MVP</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main>
+    <h1>ペット日報AI MVP</h1>
+    <p class="lead">古いスマホを置くだけ。定期キャプチャからペットの日報を作る最小版。</p>
+
+    <section class="card">
+      <video id="video" autoplay playsinline muted></video>
+      <canvas id="canvas" hidden></canvas>
+      <div class="controls">
+        <label>間隔
+          <select id="intervalSec">
+            <option value="10">10秒（テスト）</option>
+            <option value="60">1分</option>
+            <option value="300" selected>5分</option>
+          </select>
+        </label>
+        <button id="startBtn">Start diary capture</button>
+        <button id="stopBtn" disabled>Stop</button>
+      </div>
+      <p id="status">カメラ未開始</p>
+    </section>
+
+    <section class="card">
+      <button id="reportBtn">今日の日報を作る</button>
+      <pre id="report"></pre>
+    </section>
+  </main>
+  <script src="/app.js"></script>
+</body>
+</html>
