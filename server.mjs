@@ -10,11 +10,13 @@ import { parseBody, sendJson } from './src/http-utils.mjs';
 import { serveStatic } from './src/static-files.mjs';
 import { todayJst } from './src/time.mjs';
 import { AuthService, clearSessionCookie, parseCookies, sessionCookie } from './src/auth-service.mjs';
+import { AbService } from './src/ab-service.mjs';
 
 await ensureDir(paths.framesDir);
 await ensureDir(paths.reportsDir);
 
 const authService = new AuthService({ dataDir: config.dataDir });
+const abService = new AbService({ dataDir: config.dataDir });
 const aiClient = new OllamaClient(config.ollama);
 const frameService = new FrameService({ dataDir: config.dataDir, framesDir: paths.framesDir });
 const reportService = new ReportService({
@@ -40,6 +42,19 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'GET' && url.pathname === '/api/auth/state') {
       return sendJson(res, 200, { ok: true, hasUsers: authService.hasUsers(), user });
+    }
+
+    if (req.method === 'GET' && url.pathname === '/api/ab/summary') {
+      return sendJson(res, 200, { ok: true, ...(await abService.summary()) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/ab/conversion') {
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
+      return sendJson(res, 200, await abService.recordConversion(body.variant));
+    }
+
+    if (req.method === 'GET' && (url.pathname === '/lp' || url.pathname === '/lp.html')) {
+      return serveLp({ req, res });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/setup') {
@@ -136,6 +151,20 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
+async function serveLp({ req, res }) {
+  const cookies = parseCookies(req);
+  const { variant, shouldSetCookie } = await abService.chooseVariant(cookies);
+  let html = await fs.readFile(path.join(config.publicDir, 'lp.html'), 'utf8');
+  html = html
+    .replaceAll('__AB_VARIANT__', variant.id)
+    .replaceAll('__AB_IMAGE__', variant.image)
+    .replaceAll('__OG_IMAGE__', variant.ogImage);
+  const headers = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
+  if (shouldSetCookie) headers['set-cookie'] = `ab_lp_visual=${variant.id}; Path=/; Max-Age=${60 * 60 * 24 * 90}; SameSite=Lax`;
+  res.writeHead(200, headers);
+  res.end(html);
+}
+
 async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペット') {
   if (!imageDataUrl?.startsWith('data:image/jpeg;base64,')) return;
 
@@ -216,6 +245,8 @@ function isPublicPath(pathname) {
     || pathname === '/lp.html'
     || pathname.startsWith('/og-image')
     || pathname.startsWith('/assets/')
+    || pathname === '/api/ab/summary'
+    || pathname === '/api/ab/conversion'
     || pathname === '/login.html'
     || pathname === '/login.js'
     || pathname === '/style.css'

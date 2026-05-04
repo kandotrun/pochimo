@@ -10,14 +10,14 @@
   <meta property="og:title" content="留守中のペット、今日はどう過ごしてた？" />
   <meta property="og:description" content="使っていないスマホやiPadを置くだけ。AIがペットの写真と行動を記録し、家族で一日の様子を見られる無料ベータアプリです。" />
   <meta property="og:url" content="https://underlying-liquid-actor-moderators.trycloudflare.com/lp" />
-  <meta property="og:image" content="https://underlying-liquid-actor-moderators.trycloudflare.com/og-image-v3.svg" />
+  <meta property="og:image" content="https://underlying-liquid-actor-moderators.trycloudflare.com__OG_IMAGE__" />
   <meta property="og:image:type" content="image/svg+xml" />
   <meta property="og:image:width" content="1200" />
   <meta property="og:image:height" content="630" />
   <meta name="twitter:card" content="summary_large_image" />
   <meta name="twitter:title" content="留守中のペット、今日はどう過ごしてた？" />
   <meta name="twitter:description" content="使っていないスマホやiPadを置くだけ。AIがペットの写真と行動を記録します。" />
-  <meta name="twitter:image" content="https://underlying-liquid-actor-moderators.trycloudflare.com/og-image-v3.svg" />
+  <meta name="twitter:image" content="https://underlying-liquid-actor-moderators.trycloudflare.com__OG_IMAGE__" />
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -27,7 +27,7 @@
       <h1>留守中のペット、<br />今日はどう過ごしてた？</h1>
       <p class="lp-lead">使っていないスマホやiPadを置くだけ。AIがペットの写真と行動を自動で記録し、家族で一日の様子を見られます。</p>
       <div class="lp-actions">
-        <a class="primary lp-cta" href="/login">無料で使ってみる</a>
+        <a class="primary lp-cta" href="/login" data-ab-conversion="true">無料で使ってみる</a>
         <a class="ghost lp-cta" href="#how-it-works">使い方を見る</a>
       </div>
       <p class="lp-note">クレジットカード不要。まずは無料で試せます。</p>
@@ -52,8 +52,8 @@
           </div>
         </div>
         <div class="lp-photo-stack" aria-hidden="true">
+          <img src="__AB_IMAGE__" alt="" />
           <img src="/assets/lp/pet-hero.jpg" alt="" />
-          <img src="/assets/lp/pet-lifestyle.jpg" alt="" />
         </div>
       </div>
     </section>
@@ -112,8 +112,21 @@
         <h2>しばらく無料で使えます</h2>
         <p>まずは無料ベータとして公開します。使ってみて、ペットとの暮らしに本当に役立つ形へ改善していきます。</p>
       </div>
-      <a class="primary lp-cta" href="/login">無料で始める</a>
+      <a class="primary lp-cta" href="/login" data-ab-conversion="true">無料で始める</a>
     </section>
   </main>
+  <script>
+    window.__LP_AB_VARIANT__ = '__AB_VARIANT__';
+    document.querySelectorAll('[data-ab-conversion="true"]').forEach(link => {
+      link.addEventListener('click', () => {
+        const body = JSON.stringify({ variant: window.__LP_AB_VARIANT__ });
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon('/api/ab/conversion', new Blob([body], { type: 'application/json' }));
+        } else {
+          fetch('/api/ab/conversion', { method: 'POST', headers: { 'content-type': 'application/json' }, body, keepalive: true }).catch(() => {});
+        }
+      });
+    });
+  </script>
 </body>
 </html>
