@@ -55,7 +55,7 @@ async function refreshTimeline() {
   ]).then(([events, timeline]) => {
     if (date !== selectedDate) return;
     latestEvents = events;
-    renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
+    renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { edited: Boolean(timeline?.items?.length) });
     hasRenderedTimeline = true;
   }).finally(() => {
     timelineRequest = null;
@@ -256,7 +256,7 @@ function renderTimeline(events, options = {}) {
     return;
   }
 
-  const shown = options.agentic
+  const shown = options.edited
     ? events.slice(-40).reverse()
     : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-40).reverse();
   if (!shown.length) {
@@ -271,15 +271,15 @@ function renderTimeline(events, options = {}) {
     const motion = Number(event.motionScore || 0);
     const level = motion >= 50 ? 'high' : motion >= 8 ? 'mid' : 'low';
     const observation = event.ai || obsByIndex.get(originalIndex);
-    const category = event.activityLabel || observation?.activityLabel || categoryLabel(event.activityCategory || observation?.activityCategory, observation);
-    const title = event.timelineText
+    const category = event.activityLabel || event.label || observation?.activityLabel || categoryLabel(event.activityCategory || event.category || observation?.activityCategory, observation);
+    const title = cleanTimelineText(event.timelineText || event.title)
       || (observation?.petVisible === true
         ? `${shouldShowCategoryBadge(category) ? `${category}: ` : ''}${observation.petActivity || '写っています'}`
-        : observation?.scene || (event.aiStatus === 'analyzing' ? '内容を確認中...' : '写真を保存しました'));
+        : observation?.scene || (event.aiStatus === 'analyzing' ? '内容を確認中...' : '様子を確認しています'));
     const pet = observation
       ? observation.petVisible === true ? 'ペットが見えます' : observation.petVisible === false ? 'ペットは見えません' : '確認中'
-      : event.aiStatus === 'analyzing' ? '確認中' : '保存しました';
-    const detail = event.detail || observation?.scene || '写真を保存しました';
+      : event.aiStatus === 'analyzing' ? '確認中' : '';
+    const detail = cleanTimelineText(event.detail || observation?.scene || '');
 
     const badge = shouldShowCategoryBadge(category)
       ? `<span class="category-badge">${escapeHtml(category)}</span>`
@@ -292,10 +292,19 @@ function renderTimeline(events, options = {}) {
         <div class="timeline-body">
           ${event.imageUrl ? `<img class="timeline-photo" src="${escapeHtml(event.imageUrl)}?v=${encodeURIComponent(event.imageTime || event.time || '')}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
-          <p class="timeline-meta">${escapeHtml(pet)} ・ ${escapeHtml(detail)}${event.notify ? ' ・ 通知対象' : ''}</p>
+          <p class="timeline-meta">${escapeHtml([pet, detail, event.notify ? '通知対象' : ''].filter(Boolean).join(' ・ '))}</p>
         </div>
       </article>`;
   }).join('');
+}
+
+function cleanTimelineText(text) {
+  return String(text || '')
+    .replace(/^写真を保存しました[。.]?$/, '')
+    .replace(/^保存しました[。.]?$/, '')
+    .replace(/^保存しました\s*[・:：]\s*/, '')
+    .replace(/^写真を保存しました\s*[・:：]\s*/, '')
+    .trim();
 }
 
 function groupTimelineEvents(events) {
