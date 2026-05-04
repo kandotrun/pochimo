@@ -214,6 +214,7 @@ function isPublicPath(pathname) {
   return pathname === '/login'
     || pathname === '/lp'
     || pathname === '/lp.html'
+    || pathname === '/og-image.svg'
     || pathname.startsWith('/assets/')
     || pathname === '/login.html'
     || pathname === '/login.js'
