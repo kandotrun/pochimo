@@ -99,6 +99,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/start') {
       const body = JSON.parse(await parseBody(req, 32 * 1024));
+      verifySetupToken(body.setupToken || req.headers['x-setup-token']);
       const ip = getClientIp(req);
       const emailKey = String(body.email || '').trim().toLowerCase();
       enforceRateLimit(`email-start:ip:${ip}`, 30, 15 * 60 * 1000);
@@ -110,6 +111,7 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/verify') {
       const body = JSON.parse(await parseBody(req, 32 * 1024));
+      verifySetupToken(body.setupToken || req.headers['x-setup-token']);
       const ip = getClientIp(req);
       const emailKey = String(body.email || '').trim().toLowerCase();
       enforceRateLimit(`email-verify:ip:${ip}`, 60, 15 * 60 * 1000);
