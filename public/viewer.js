@@ -286,9 +286,8 @@ function renderTimeline(events, options = {}) {
   timelineEl.className = 'timeline';
   timelineEl.innerHTML = shown.map(event => {
     const originalIndex = events.indexOf(event);
-    const motion = Number(event.motionScore || 0);
-    const level = motion >= 50 ? 'high' : motion >= 8 ? 'mid' : 'low';
     const observation = event.ai || obsByIndex.get(originalIndex);
+    const level = timelineImportanceLevel(event, observation);
     const category = event.activityLabel || event.label || observation?.activityLabel || categoryLabel(event.activityCategory || event.category || observation?.activityCategory, observation);
     const title = cleanTimelineText(event.timelineText || event.title)
       || (observation?.petVisible === true
@@ -313,6 +312,16 @@ function renderTimeline(events, options = {}) {
         </div>
       </article>`;
   }).join('');
+}
+
+function timelineImportanceLevel(event, observation = null) {
+  const category = event.activityCategory || event.category || observation?.activityCategory || '';
+  const importance = event.importance || '';
+
+  if (event.notify || importance === 'high' || category === 'mischief') return 'high';
+  if (['eat', 'drink', 'toilet', 'play', 'moving', 'near_owner'].includes(category)) return 'mid';
+  if (importance === 'normal') return 'mid';
+  return 'low';
 }
 
 function applyTimelineMode(items, mode) {
