@@ -345,19 +345,59 @@ function sleep(ms) {
 }
 
 function createFallbackTimeline(events, petName = 'ペット') {
-  return events
+  const visible = events
     .filter(event => event.notify || event.ai?.petVisible === true || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(event.activityCategory || event.ai?.activityCategory))
-    .slice(-24)
-    .map(event => ({
+    .slice(-80);
+  const groups = [];
+
+  for (const event of visible) {
+    const previous = groups.at(-1);
+    const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+    if (previous && !previous.notify && !event.notify && previous.category === category && Math.abs(parseEventTime(event.time) - parseEventTime(previous.endTime)) <= 12 * 60 * 1000) {
+      previous.events.push(event);
+      previous.endTime = event.time;
+      previous.title = fallbackGroupTitle(previous.events, petName);
+      previous.detail = event.ai?.scene || previous.detail || '';
+      continue;
+    }
+
+    groups.push({
       startTime: event.time,
       endTime: event.time,
-      category: event.activityCategory || event.ai?.activityCategory || 'unknown',
-      label: event.activityLabel || event.ai?.activityLabel || '記録',
-      title: event.timelineText || event.ai?.petActivity || `${petName}の様子を記録しました。`,
+      category,
+      label: event.activityLabel || event.ai?.activityLabel || categoryToLabel(category),
+      title: naturalTimelineTitle(event, petName),
       detail: event.ai?.scene || '',
       importance: event.notify ? 'high' : 'normal',
-      notify: Boolean(event.notify)
-    }));
+      notify: Boolean(event.notify),
+      events: [event]
+    });
+  }
+
+  return groups.slice(-12).map(({ events: _events, ...item }) => item);
+}
+
+function naturalTimelineTitle(event, petName) {
+  const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+  if (event.notificationText) return event.notificationText;
+  if (event.ai?.petActivity && event.ai.petActivity !== '不明') return event.ai.petActivity.replaceAll('ペット', petName);
+  if (event.timelineText && !event.timelineText.includes('写真を保存しました')) return event.timelineText.replace(/^[^:：]+[:：]\s*/, '').replaceAll('ペット', petName);
+  if (event.ai?.scene) return event.ai.scene.replaceAll('ペット', petName);
+  return `${petName}の様子を記録しました。`;
+}
+
+function fallbackGroupTitle(events, petName) {
+  const latest = events.at(-1);
+  const category = latest.activityCategory || latest.ai?.activityCategory || 'unknown';
+  const label = latest.activityLabel || latest.ai?.activityLabel || categoryToLabel(category);
+  if (category === 'sleep') return `${petName}はしばらく同じ場所で休んでいました。`;
+  if (category === 'rest') return `${petName}はしばらく同じ場所で過ごしていました。`;
+  if (category === 'not_visible') return `しばらく${petName}の姿が確認しづらい状態でした。`;
+  return `${label}: ${naturalTimelineTitle(latest, petName)}`;
+}
+
+function categoryToLabel(category) {
+  return ({ sleep: 'お昼寝中', eat: 'ご飯中', drink: '水飲み', toilet: 'トイレ', play: '遊んでいる', mischief: 'イタズラかも', near_owner: '人の近く', moving: '移動中', rest: 'くつろぎ中', not_visible: '見えない', unknown: '記録' })[category] || '記録';
 }
 
 function normalizeTimelineItems(items, events) {

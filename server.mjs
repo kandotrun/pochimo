@@ -241,8 +241,9 @@ async function getCachedTimeline({ date, user, events, petName }) {
 
   const promise = aiClient.createTimeline({ events, petName })
     .then(result => {
-      timelineCache.set(cacheKey, { signature, result, createdAt: Date.now() });
-      return result;
+      const enriched = enrichTimelineWithImages(result, events);
+      timelineCache.set(cacheKey, { signature, result: enriched, createdAt: Date.now() });
+      return enriched;
     })
     .catch(err => {
       timelineCache.delete(cacheKey);
@@ -251,6 +252,50 @@ async function getCachedTimeline({ date, user, events, petName }) {
 
   timelineCache.set(cacheKey, { signature, promise, createdAt: Date.now() });
   return promise;
+}
+
+function enrichTimelineWithImages(timeline, events) {
+  const items = (timeline.items || []).map(item => {
+    const event = findTimelinePhotoEvent(item, events);
+    return {
+      ...item,
+      imageUrl: event?.file ? `/${event.file}` : '',
+      imageTime: event?.time || ''
+    };
+  });
+  return { ...timeline, items };
+}
+
+function findTimelinePhotoEvent(item, events) {
+  const withFiles = events.filter(event => event.file);
+  if (!withFiles.length) return null;
+
+  const start = parseTimelineTime(item.startTime || item.time);
+  const end = parseTimelineTime(item.endTime || item.time || item.startTime);
+  const inRange = withFiles.filter(event => {
+    const time = parseTimelineTime(event.time);
+    return time >= start && time <= end;
+  });
+  const candidates = inRange.length ? inRange : withFiles;
+  return candidates.reduce((best, event) => {
+    const score = timelinePhotoScore(event, item);
+    return score > best.score ? { event, score } : best;
+  }, { event: candidates[0], score: -Infinity }).event;
+}
+
+function timelinePhotoScore(event, item) {
+  let score = Number(event.motionScore || 0);
+  if (event.ai?.petVisible === true) score += 40;
+  if ((event.activityCategory || event.ai?.activityCategory) === item.activityCategory) score += 18;
+  if (event.notify) score += 24;
+  if (event.timelineText) score += 6;
+  return score;
+}
+
+function parseTimelineTime(time) {
+  const normalized = String(time || '').replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3');
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function buildTimelineSignature(events) {

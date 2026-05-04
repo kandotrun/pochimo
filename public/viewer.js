@@ -252,6 +252,7 @@ function renderTimeline(events, options = {}) {
         <time class="timeline-time">${escapeHtml(formatTimelineTime(event))}</time>
         <span class="timeline-dot ${level}"></span>
         <div class="timeline-body">
+          ${event.imageUrl ? `<img class="timeline-photo" src="${escapeHtml(event.imageUrl)}?v=${encodeURIComponent(event.imageTime || event.time || '')}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
           <p class="timeline-meta">${escapeHtml(pet)} ・ ${escapeHtml(detail)}${event.notify ? ' ・ 通知対象' : ''}</p>
         </div>
