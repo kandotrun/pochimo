@@ -402,7 +402,9 @@ async function notifyImportantEventByEmail(event, petName = 'ペット') {
 function shouldSendEventMail(event) {
   if (event.notificationStatus === 'sent') return false;
   if (!event.file) return false;
-  return Boolean(event.notify) || event.activityCategory === 'mischief';
+  const category = event.activityCategory || event.ai?.activityCategory || '';
+  if (['not_visible', 'unknown', 'rest', 'sleep', 'eat', 'drink', 'toilet', 'moving', 'near_owner', 'play'].includes(category)) return false;
+  return category === 'mischief' || (Boolean(event.notify) && event.ai?.petVisible === true);
 }
 
 function isEmailAddress(value) {
