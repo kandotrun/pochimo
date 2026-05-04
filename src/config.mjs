@@ -13,6 +13,11 @@ export const config = {
   appOrigin: process.env.PUBLIC_APP_ORIGIN || 'https://diary.pochimo.com',
   dataDir: path.join(rootDir, 'data'),
   publicDir: path.join(rootDir, 'public'),
+  mail: {
+    resendApiKey: process.env.RESEND_API_KEY || '',
+    from: process.env.MAIL_FROM || 'ぽちも日報 <noreply@send.pochimo.com>',
+    replyTo: process.env.MAIL_REPLY_TO || ''
+  },
   ollama: {
     localUrl: process.env.OLLAMA_URL || 'http://127.0.0.1:11434',
     localVisionModel: process.env.OLLAMA_VISION_MODEL || 'moondream',
