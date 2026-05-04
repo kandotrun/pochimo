@@ -293,6 +293,7 @@ function renderTimeline(events, options = {}) {
     const detail = cleanTimelineText(event.detail || observation?.scene || '');
     const imageSrc = event.imageUrl || (event.file ? `/${event.file}` : '');
     const imageVersion = event.imageTime || event.time || event.endTime || event.startTime || '';
+    const petBoxHtml = renderTimelinePetBox(event, observation);
 
     const badge = shouldShowCategoryBadge(category)
       ? `<span class="category-badge">${escapeHtml(category)}</span>`
@@ -303,12 +304,20 @@ function renderTimeline(events, options = {}) {
         <time class="timeline-time">${escapeHtml(formatTimelineTime(event))}</time>
         <span class="timeline-dot ${level}"></span>
         <div class="timeline-body">
-          ${imageSrc ? `<img class="timeline-photo" src="${escapeHtml(imageSrc)}?v=${encodeURIComponent(imageVersion)}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
+          ${imageSrc ? `<div class="timeline-photo-wrap"><img class="timeline-photo" src="${escapeHtml(imageSrc)}?v=${encodeURIComponent(imageVersion)}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />${petBoxHtml}</div>` : ''}
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
           ${detail ? `<p class="timeline-meta">${escapeHtml(detail)}</p>` : ''}
         </div>
       </article>`;
   }).join('');
+}
+
+function renderTimelinePetBox(event, observation = null) {
+  const visible = event.petVisible === true || observation?.petVisible === true || event.ai?.petVisible === true;
+  const box = normalizePetBox(event.petBox || observation?.petBox || event.ai?.petBox);
+  if (!visible || !box) return '';
+  const label = petProfile.name?.trim() ? `${petProfile.name.trim()}はここ` : 'ここにいます';
+  return `<div class="timeline-pet-overlay"><div class="pet-box timeline-pet-box" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.width * 100}%;height:${box.height * 100}%"><span>${escapeHtml(label)}</span></div></div>`;
 }
 
 function timelineImportanceLevel(event, observation = null) {

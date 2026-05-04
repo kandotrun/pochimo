@@ -298,7 +298,9 @@ function enrichTimelineWithImages(timeline, events) {
     return {
       ...item,
       imageUrl: event?.file ? `/${event.file}` : '',
-      imageTime: event?.time || ''
+      imageTime: event?.time || '',
+      petBox: event?.ai?.petBox || event?.petBox || null,
+      petVisible: event?.ai?.petVisible === true
     };
   });
   return { ...timeline, items };
