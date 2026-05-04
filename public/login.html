@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>ログイン</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="auth-shell">
+    <section class="card auth-card">
+      <div class="auth-icon">🐾</div>
+      <h1 id="authTitle">ログイン</h1>
+      <p id="authLead" class="lead">ペットの記録を見るにはログインしてください。</p>
+
+      <form id="authForm" class="auth-form">
+        <label class="field">ユーザー名
+          <input id="username" type="text" autocomplete="username" required />
+        </label>
+        <label class="field">パスワード
+          <input id="password" type="password" autocomplete="current-password" required minlength="8" />
+        </label>
+        <label id="inviteField" class="field" hidden>招待コード
+          <input id="inviteCode" type="text" autocomplete="off" />
+        </label>
+        <button id="submitBtn" class="primary" type="submit">ログイン</button>
+      </form>
+      <p id="authStatus" class="status"></p>
+    </section>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>

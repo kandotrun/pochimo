@@ -1,14 +1,27 @@
-const OBSERVATION_PROMPT = `あなたはペット見守り日報AIです。画像は室内に置いたスマホカメラの代表フレームです。
+function observationPrompt(petName = 'ペット') {
+  const name = String(petName || 'ペット').trim() || 'ペット';
+  return `あなたはペット見守り日報AIです。画像は室内に置いたスマホカメラの代表フレームです。
 
+対象のペット名は「${name}」です。
 必ず日本語で、医療診断はせず、観察できる事実だけを書いてください。
+出力文では「ペット」ではなく、可能な限り「${name}」という名前を使ってください。
+例: 「ケージの中にペットがいます」ではなく「ケージの中に${name}がいます」。
+
 以下のJSONだけを返してください。
 {
   "petVisible": true/false,
-  "scene": "室内の状況を1文",
-  "petActivity": "ペットが見える場合の様子。不明なら不明",
+  "scene": "室内の状況を1文。${name}が見えるなら名前を含める",
+  "petActivity": "${name}が見える場合の様子。不明なら不明",
+  "activityCategory": "sleep|eat|drink|toilet|play|mischief|near_owner|moving|rest|not_visible|unknown のどれか",
+  "activityLabel": "お昼寝中/ご飯中/水飲み/トイレ/遊んでいる/イタズラかも/人の近く/移動中/くつろぎ中/見えない/不明 のような短い日本語",
+  "notify": true/false,
+  "notificationText": "飼い主に通知するなら${name}を含む短い一文。不要なら空文字",
   "concerns": ["気になる点。暗い/見切れ/判定困難も含む"],
   "ownerChecks": ["飼い主が確認するとよいこと"]
-}`;
+}
+
+通知は、ご飯・水・トイレ・イタズラ疑い・危険そうな状態・長時間見えない場合を優先してください。単なる静止や普段通りの休憩は notify=false にしてください。`;
+}
 
 function extractJson(raw) {
   const text = String(raw || '').trim();
@@ -41,20 +54,22 @@ export class OllamaClient {
     this.apiKey = options.apiKey;
   }
 
-  async analyzeImages(images) {
+  async analyzeImages(images, { petName = 'ペット' } = {}) {
     if (images.length === 0) {
       return { enabled: false, model: this.cloudVisionModel, summary: '解析対象の画像がありません。' };
     }
 
     if (this.apiKey) {
-      const cloud = await this.#tryCloudVision(images);
+      const cloud = images.length > 1
+        ? await this.#tryCloudVisionSingleFrames(images, new Error('batch skipped'), petName)
+        : await this.#tryCloudVision(images, petName);
       if (cloud) return cloud;
     }
 
-    return this.#localVision(images);
+    return this.#localVision(images, petName);
   }
 
-  async polishReport({ report, fallbackMarkdown }) {
+  async polishReport({ report, fallbackMarkdown, petName = 'ペット' }) {
     if (!this.apiKey || report.capturedFrames === 0) {
       return {
         enabled: false,
@@ -65,6 +80,8 @@ export class OllamaClient {
     }
 
     const prompt = `以下はペット見守りMVPの生ログです。飼い主向けの自然な日本語日報に整えてください。
+
+対象のペット名は「${petName}」です。本文では「ペット」ではなく、可能な限りこの名前を使ってください。
 
 制約:
 - 医療診断はしない
@@ -103,17 +120,16 @@ ${fallbackMarkdown}`;
     }
   }
 
-  async #tryCloudVision(images) {
+  async #tryCloudVision(images, petName) {
     try {
       const content = [
-        { type: 'text', text: OBSERVATION_PROMPT },
+        { type: 'text', text: observationPrompt(petName) },
         ...images.map(image => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }))
       ];
 
       const data = await this.#chatCompletions({
         model: this.cloudVisionModel,
         messages: [{ role: 'user', content }],
-        response_format: { type: 'json_object' },
         temperature: 0.1,
         max_tokens: 1200
       });
@@ -128,19 +144,69 @@ ${fallbackMarkdown}`;
         ...safeObservationParse(raw, 'Visionモデルの返答がJSONではありませんでした')
       };
     } catch (err) {
-      console.warn(`cloud vision failed; falling back to local ollama: ${err.message}`);
-      return null;
+      console.warn(`cloud vision batch failed; trying single-frame cloud vision: ${err.message}`);
+      return this.#tryCloudVisionSingleFrames(images, err, petName);
     }
   }
 
-  async #localVision(images) {
+  async #tryCloudVisionSingleFrames(images, originalError, petName) {
+    const observations = await mapWithConcurrency(images, 3, async (image, index) => {
+      try {
+        const data = await this.#chatCompletions({
+          model: this.cloudVisionModel,
+          messages: [{
+            role: 'user',
+            content: [
+              { type: 'text', text: observationPrompt(petName) },
+              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }
+            ]
+          }],
+          temperature: 0.1,
+          max_tokens: 800
+        });
+
+        const raw = data.choices?.[0]?.message?.content || '';
+        return { index, raw: String(raw).trim(), parsed: safeObservationParse(raw, 'Visionモデルの返答がJSONではありませんでした') };
+      } catch (err) {
+        return { index, raw: '', parsed: { petVisible: null, scene: '解析失敗', petActivity: '不明', concerns: [`frame ${index + 1}: ${err.message}`], ownerChecks: [] } };
+      }
+    });
+
+    const successful = observations.filter(item => item.raw);
+    if (!successful.length) {
+      console.warn(`cloud vision single-frame failed; falling back to local ollama: ${originalError.message}`);
+      return null;
+    }
+
+    const petVisible = observations.some(item => item.parsed.petVisible === true)
+      ? true
+      : observations.every(item => item.parsed.petVisible === false)
+        ? false
+        : null;
+
+    return {
+      enabled: true,
+      provider: 'ollama-cloud-single-frame',
+      model: this.cloudVisionModel,
+      framesAnalyzed: successful.length,
+      petVisible,
+      scene: observations.map(item => `frame ${item.index + 1}: ${item.parsed.scene || item.raw}`).join(' / '),
+      petActivity: observations.map(item => item.parsed.petActivity).filter(Boolean).join(' / ') || '不明',
+      concerns: observations.flatMap(item => item.parsed.concerns || []).slice(0, 6),
+      ownerChecks: observations.flatMap(item => item.parsed.ownerChecks || []).slice(0, 6),
+      frameObservations: observations.map(item => ({ index: item.index, ...item.parsed, raw: item.raw })),
+      raw: observations.map(item => `frame ${item.index + 1}: ${item.raw || '解析失敗'}`).join('\n')
+    };
+  }
+
+  async #localVision(images, petName) {
     try {
       const response = await fetch(`${this.localUrl}/api/generate`, {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           model: this.localVisionModel,
-          prompt: OBSERVATION_PROMPT,
+          prompt: observationPrompt(petName),
           images,
           stream: false,
           options: { temperature: 0.2 }
@@ -202,4 +268,20 @@ ${fallbackMarkdown}`;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+async function mapWithConcurrency(items, concurrency, mapper) {
+  const results = new Array(items.length);
+  let nextIndex = 0;
+
+  async function worker() {
+    while (nextIndex < items.length) {
+      const index = nextIndex;
+      nextIndex += 1;
+      results[index] = await mapper(items[index], index);
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, worker));
+  return results;
 }

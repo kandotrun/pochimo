@@ -1,7 +1,10 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { existsSync, readFileSync } from 'node:fs';
 
 const rootDir = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
+
+loadDotEnv(path.join(rootDir, '.env'));
 
 export const config = {
   rootDir,
@@ -22,3 +25,23 @@ export const paths = {
   framesDir: path.join(config.dataDir, 'frames'),
   reportsDir: path.join(config.dataDir, 'reports')
 };
+
+function loadDotEnv(filePath) {
+  if (!existsSync(filePath)) return;
+
+  const lines = readFileSync(filePath, 'utf8').split(/\r?\n/);
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#')) continue;
+
+    const match = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)=(.*)$/);
+    if (!match) continue;
+
+    const [, key, rawValue] = match;
+    if (process.env[key] !== undefined) continue;
+
+    process.env[key] = rawValue
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+  }
+}

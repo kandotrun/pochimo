@@ -17,17 +17,31 @@ export class ReportService {
     this.aiClient = aiClient;
   }
 
-  async createReport(date = todayJst(), { useAi = true } = {}) {
-    const events = await this.#readEvents(date);
+  async getReport(date = todayJst(), { userId = null } = {}) {
+    const jsonPath = this.#reportJsonPath(date, userId);
+    const markdownPath = this.#reportMarkdownPath(date, userId);
+    if (!await fileExists(jsonPath) || !await fileExists(markdownPath)) {
+      return { exists: false, report: null, markdown: '' };
+    }
+
+    return {
+      exists: true,
+      report: await readJson(jsonPath, null),
+      markdown: await fs.readFile(markdownPath, 'utf8')
+    };
+  }
+
+  async createReport(date = todayJst(), { useAi = true, userId = null, petName = 'ペット' } = {}) {
+    const events = await this.#readEvents(date, userId);
     const metrics = this.#buildMetrics(events);
     const ai = useAi && events.length > 0
-      ? await this.#analyzeRepresentativeFrames(events)
+      ? await this.#analyzeRepresentativeFrames(events, petName)
       : { enabled: false, summary: 'AI解析は未実行です。' };
 
     const report = this.#buildReport({ date, events, metrics, ai });
     const fallbackMarkdown = this.#renderFallbackMarkdown(report);
     const cloud = useAi
-      ? await this.aiClient.polishReport({ report, fallbackMarkdown })
+      ? await this.aiClient.polishReport({ report, fallbackMarkdown, petName })
       : { enabled: false, markdown: fallbackMarkdown };
 
     report.cloud = {
@@ -37,14 +51,16 @@ export class ReportService {
     };
 
     const markdown = cloud.markdown || fallbackMarkdown;
-    await writeJson(path.join(this.reportsDir, `${date}.json`), report);
-    await fs.writeFile(path.join(this.reportsDir, `${date}.md`), markdown);
+    await writeJson(this.#reportJsonPath(date, userId), report);
+    await fs.writeFile(this.#reportMarkdownPath(date, userId), markdown);
 
     return { report, markdown };
   }
 
-  async #readEvents(date) {
-    return readJson(path.join(this.dataDir, `${date}.events.json`), []);
+  async #readEvents(date, userId = null) {
+    const events = await readJson(path.join(this.dataDir, `${date}.events.json`), []);
+    if (userId == null) return events;
+    return events.filter(event => Number(event.userId) === Number(userId));
   }
 
   #buildMetrics(events) {
@@ -83,7 +99,7 @@ export class ReportService {
     return quietPeriods;
   }
 
-  async #analyzeRepresentativeFrames(events) {
+  async #analyzeRepresentativeFrames(events, petName) {
     const images = [];
     for (const event of pickRepresentativeEvents(events)) {
       const imagePath = path.join(this.rootDir, event.file);
@@ -96,7 +112,19 @@ export class ReportService {
       return { enabled: false, summary: '保存画像が見つかりません。' };
     }
 
-    return this.aiClient.analyzeImages(images);
+    return this.aiClient.analyzeImages(images, { petName });
+  }
+
+  #reportJsonPath(date, userId) {
+    return path.join(this.reportsDir, this.#reportFileName(date, userId, 'json'));
+  }
+
+  #reportMarkdownPath(date, userId) {
+    return path.join(this.reportsDir, this.#reportFileName(date, userId, 'md'));
+  }
+
+  #reportFileName(date, userId, ext) {
+    return userId == null ? `${date}.${ext}` : `${date}.user-${userId}.${ext}`;
   }
 
   #buildReport({ date, events, metrics, ai }) {
@@ -120,17 +148,7 @@ export class ReportService {
 }
 
 function pickRepresentativeEvents(events) {
-  if (events.length === 0) return [];
-
-  const mostActive = [...events].sort((a, b) => b.motionScore - a.motionScore)[0];
-  const picks = [events[0], mostActive, events.at(-1)].filter(Boolean);
-  const seen = new Set();
-
-  return picks.filter(event => {
-    if (seen.has(event.file)) return false;
-    seen.add(event.file);
-    return true;
-  }).slice(0, 3);
+  return events;
 }
 
 function renderAiSection(ai) {

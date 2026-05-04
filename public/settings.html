@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>設定</title>
+  <link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+  <main class="app-shell with-tabs">
+    <nav class="tab-nav" aria-label="メインナビゲーション">
+      <a class="tab-link" href="/viewer">表示</a>
+      <a class="tab-link" href="/camera">撮影</a>
+      <a class="tab-link active" href="/settings">設定</a>
+    </nav>
+
+    <header class="hero pet-hero">
+      <div class="pet-heading">
+        <div id="petAvatar" class="pet-avatar">🐾</div>
+        <div>
+          <h1>設定</h1>
+          <p id="settingsLead" class="lead">ペットの名前と写真を登録できます。</p>
+        </div>
+      </div>
+    </header>
+
+    <section class="card profile-card">
+      <div class="section-head">
+        <div>
+          <h2>ペットプロフィール</h2>
+          <p class="section-description">名前は必須です。記録や通知ではこの名前を使います。</p>
+        </div>
+      </div>
+      <div class="profile-form">
+        <label class="field">名前
+          <input id="petNameInput" type="text" placeholder="例: こむぎ" autocomplete="off" />
+        </label>
+        <label class="upload-button">
+          写真を選ぶ
+          <input id="petPhotoInput" type="file" accept="image/*" hidden />
+        </label>
+      </div>
+      <p id="profileStatus" class="status">未保存の変更は自動保存されます。</p>
+    </section>
+
+    <section class="card invite-card">
+      <div class="section-head">
+        <div>
+          <h2>家族を招待</h2>
+          <p class="section-description">招待リンクを共有すると、家族もこの記録を見られます。</p>
+        </div>
+        <button id="createInviteBtn" class="primary" type="button">招待リンクを作成</button>
+      </div>
+      <div id="inviteResult" class="invite-result" hidden></div>
+      <div id="inviteList" class="invite-list"></div>
+    </section>
+  </main>
+
+  <div id="cropModal" class="crop-modal" hidden>
+    <div class="crop-card">
+      <div class="section-head">
+        <div>
+          <h2>写真をトリミング</h2>
+          <p class="section-description">丸いアイコンに収まるように調整してください。</p>
+        </div>
+      </div>
+      <div class="crop-stage">
+        <img id="cropImage" alt="トリミングする写真" />
+        <div class="crop-mask"></div>
+      </div>
+      <div class="crop-controls">
+        <label class="field">ズーム
+          <input id="cropZoom" type="range" min="1" max="3" step="0.01" value="1" />
+        </label>
+        <label class="field">左右
+          <input id="cropX" type="range" min="-100" max="100" step="1" value="0" />
+        </label>
+        <label class="field">上下
+          <input id="cropY" type="range" min="-100" max="100" step="1" value="0" />
+        </label>
+      </div>
+      <canvas id="cropCanvas" hidden></canvas>
+      <div class="crop-actions">
+        <button id="cropCancel" class="secondary" type="button">キャンセル</button>
+        <button id="cropSave" class="primary" type="button">この写真にする</button>
+      </div>
+    </div>
+  </div>
+  <script src="/settings.js"></script>
+</body>
+</html>
