@@ -6,6 +6,7 @@ const latestTitle = document.getElementById('latestTitle');
 const pageTitle = document.getElementById('pageTitle');
 const pageLead = document.getElementById('pageLead');
 const petAvatar = document.getElementById('petAvatar');
+const reportSection = document.getElementById('reportSection');
 const reportEl = document.getElementById('report');
 const timelineEl = document.getElementById('timeline');
 const latestImage = document.getElementById('latestImage');
@@ -650,18 +651,17 @@ async function refreshReport() {
     const res = await fetch(`/api/report?date=${encodeURIComponent(selectedDate)}`);
     const json = await res.json();
     if (!json.exists) {
-      reportEl.classList.add('report-placeholder');
-      reportEl.textContent = selectedDate === todayString()
-        ? '22時になると、今日のふりかえりが表示されます。'
-        : `${formatDateLabel(selectedDate)}のふりかえりはまだありません。`;
+      reportSection.hidden = true;
+      reportEl.textContent = '';
       return;
     }
 
+    reportSection.hidden = false;
     reportEl.classList.remove('report-placeholder');
     reportEl.textContent = json.markdown || '';
   } catch (err) {
-    reportEl.classList.add('report-placeholder');
-    reportEl.textContent = `ふりかえりを読み込めませんでした: ${err.message}`;
+    reportSection.hidden = true;
+    reportEl.textContent = '';
   }
 }
 
