@@ -524,10 +524,13 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   padding: max(28px, env(safe-area-inset-top)) 20px 56px;
 }
 .lp-hero {
+  max-width: 920px;
   min-height: 58vh;
   display: grid;
-  place-items: center;
-  text-align: center;
+  align-content: center;
+  justify-items: start;
+  text-align: left;
+  margin: 0 auto;
   padding: 48px 0 28px;
 }
 .lp-badge {
@@ -561,14 +564,14 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .lp-hero h1 span { display: block; }
 .lp-lead {
   max-width: 660px;
-  margin: 22px auto 0;
+  margin: 22px 0 0;
   color: var(--muted-foreground);
   font-size: clamp(16px, 2.6vw, 21px);
   line-height: 1.8;
 }
 .lp-actions {
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 12px;
   margin-top: 28px;
   flex-wrap: wrap;
@@ -596,7 +599,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border: 0;
   overflow: hidden;
 }
-.lp-preview-copy { text-align: center; margin-bottom: 18px; }
+.lp-preview-copy { text-align: left; margin-bottom: 18px; }
 .lp-preview-copy p {
   margin: 0 0 6px;
   color: var(--muted-foreground);
@@ -670,7 +673,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .lp-photo-stack img:first-child { transform: rotate(1deg); }
 .lp-photo-stack img:last-child { transform: rotate(-1deg); }
 .lp-section { margin-top: 64px; }
-.lp-section-head { text-align: center; margin-bottom: 22px; }
+.lp-section-head { text-align: left; margin-bottom: 22px; }
 .lp-section-head h2, .lp-free h2, .lp-privacy h2 { margin: 0; font-size: clamp(28px, 5vw, 44px); letter-spacing: -0.04em; }
 .lp-section-head p, .lp-free p, .lp-privacy p { color: var(--muted-foreground); line-height: 1.8; }
 .lp-feature-grid {
@@ -781,8 +784,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   .lp-shell { padding-inline: 16px; }
   .lp-hero { min-height: auto; padding-top: 36px; }
   .lp-hero h1 {
-    max-width: 360px;
-    margin-inline: auto;
+    max-width: 380px;
+    margin-inline: 0;
     font-size: clamp(38px, 11vw, 48px);
     line-height: 1.12;
     letter-spacing: -0.06em;
