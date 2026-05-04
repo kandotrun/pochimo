@@ -107,11 +107,12 @@ ${fallbackMarkdown}`;
           { role: 'user', content: prompt }
         ],
         temperature: 0.3,
-        max_tokens: 1200
+        max_tokens: 2600
       });
 
       const markdown = data.choices?.[0]?.message?.content?.trim();
       if (!markdown) throw new Error('empty response');
+      if (!isCompleteReportMarkdown(markdown)) throw new Error('incomplete report markdown');
       return { enabled: true, model: this.cloudReportModel, markdown };
     } catch (err) {
       return {
@@ -417,6 +418,19 @@ ${JSON.stringify(compactEvents)}`;
 
     throw lastError;
   }
+}
+
+function isCompleteReportMarkdown(markdown) {
+  const text = String(markdown || '').trim();
+  if (!text) return false;
+  const requiredHeadings = ['# 今日の様子', '# 気になる点', '# 明日見ること'];
+  if (!requiredHeadings.every(heading => text.includes(heading))) return false;
+
+  const lastLine = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).at(-1) || '';
+  if (!lastLine) return false;
+  if (/[,、・:：へにをがのとで]$/.test(lastLine)) return false;
+  if (lastLine.startsWith('- ') && !/[。.!！?？）)]$/.test(lastLine)) return false;
+  return true;
 }
 
 function sleep(ms) {
