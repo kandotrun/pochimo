@@ -129,7 +129,7 @@ ${fallbackMarkdown}`;
       return { enabled: false, model: this.cloudReportModel, items: fallback, summary: 'API keyなし、またはイベントなし' };
     }
 
-    const compactEvents = events.slice(-160).map(event => ({
+    const compactEvents = selectTimelineSourceEvents(events, 160).map(event => ({
       time: event.time,
       activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
       activityLabel: event.activityLabel || event.ai?.activityLabel || '',
@@ -346,8 +346,7 @@ function sleep(ms) {
 
 function createFallbackTimeline(events, petName = 'ペット') {
   const visible = events
-    .filter(event => event.notify || event.ai?.petVisible === true || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(event.activityCategory || event.ai?.activityCategory))
-    .slice(-80);
+    .filter(event => event.notify || event.ai?.petVisible === true || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(event.activityCategory || event.ai?.activityCategory));
   const groups = [];
 
   for (const event of visible) {
@@ -374,7 +373,42 @@ function createFallbackTimeline(events, petName = 'ペット') {
     });
   }
 
-  return groups.slice(-12).map(({ events: _events, ...item }) => item);
+  return selectRepresentativeGroups(groups, 12).map(({ events: _events, ...item }) => item);
+}
+
+function selectTimelineSourceEvents(events, maxItems) {
+  const meaningful = events.filter(event => {
+    const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+    return event.notify
+      || event.ai?.petVisible === true
+      || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(category);
+  });
+  if (meaningful.length <= maxItems) return meaningful;
+
+  const required = meaningful.filter(event => event.notify || ['mischief', 'eat', 'drink', 'toilet', 'play'].includes(event.activityCategory || event.ai?.activityCategory));
+  const rest = meaningful.filter(event => !required.includes(event));
+  return [...required, ...sampleEvenly(rest, Math.max(0, maxItems - required.length))]
+    .sort((a, b) => String(a.time).localeCompare(String(b.time)))
+    .slice(0, maxItems);
+}
+
+function selectRepresentativeGroups(groups, maxItems) {
+  if (groups.length <= maxItems) return groups;
+  const required = groups.filter(group => group.notify || ['mischief', 'eat', 'drink', 'toilet', 'play'].includes(group.category));
+  const rest = groups.filter(group => !required.includes(group));
+  return [...required, ...sampleEvenly(rest, Math.max(0, maxItems - required.length))]
+    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
+    .slice(0, maxItems);
+}
+
+function sampleEvenly(items, maxItems) {
+  if (maxItems <= 0) return [];
+  if (items.length <= maxItems) return items;
+  if (maxItems === 1) return [items[Math.floor(items.length / 2)]];
+  return Array.from({ length: maxItems }, (_, index) => {
+    const itemIndex = Math.round(index * (items.length - 1) / (maxItems - 1));
+    return items[itemIndex];
+  });
 }
 
 function naturalTimelineTitle(event, petName) {
@@ -390,10 +424,18 @@ function fallbackGroupTitle(events, petName) {
   const latest = events.at(-1);
   const category = latest.activityCategory || latest.ai?.activityCategory || 'unknown';
   const label = latest.activityLabel || latest.ai?.activityLabel || categoryToLabel(category);
-  if (category === 'sleep') return `${petName}はしばらく同じ場所で休んでいました。`;
-  if (category === 'rest') return `${petName}はしばらく同じ場所で過ごしていました。`;
+  const place = placeFromScene(latest.ai?.scene || latest.timelineText || '');
+  if (category === 'sleep') return place ? `${petName}は${place}でしばらく休んでいました。` : `${petName}はしばらく休んでいました。`;
+  if (category === 'rest') return place ? `${petName}は${place}でしばらく過ごしていました。` : `${petName}はしばらく過ごしていました。`;
   if (category === 'not_visible') return `しばらく${petName}の姿が確認しづらい状態でした。`;
+  if (label === '記録') return naturalTimelineTitle(latest, petName);
   return `${label}: ${naturalTimelineTitle(latest, petName)}`;
+}
+
+function placeFromScene(text) {
+  const value = String(text || '');
+  const places = ['ケージの中', 'テーブルの下', '椅子の上', '椅子の近く', '床の上', 'クッションのあたり', 'キャリーケースのあたり'];
+  return places.find(place => value.includes(place)) || '';
 }
 
 function categoryToLabel(category) {
