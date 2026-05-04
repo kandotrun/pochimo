@@ -53,6 +53,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/ab/conversion') {
+      enforceRateLimit(`ab-conversion:ip:${getClientIp(req)}`, 120, 15 * 60 * 1000);
       const body = JSON.parse(await parseBody(req, 32 * 1024));
       return sendJson(res, 200, await abService.recordConversion(body.variant));
     }
@@ -66,7 +67,10 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/setup') {
-      const body = JSON.parse(await parseBody(req));
+      const ip = getClientIp(req);
+      enforceRateLimit(`setup:ip:${ip}`, 5, 60 * 60 * 1000);
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
+      verifySetupToken(body.setupToken || req.headers['x-setup-token']);
       const created = authService.createFirstUser(body);
       const session = authService.login({ username: created.username, password: body.password });
       res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
@@ -74,7 +78,9 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/register') {
-      const body = JSON.parse(await parseBody(req));
+      const ip = getClientIp(req);
+      enforceRateLimit(`register:ip:${ip}`, 20, 60 * 60 * 1000);
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
       const created = authService.createUserWithInvite(body);
       const session = authService.login({ username: created.username, password: body.password });
       res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
@@ -82,13 +88,17 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
-      const session = authService.login(JSON.parse(await parseBody(req)));
+      const ip = getClientIp(req);
+      enforceRateLimit(`password-login:ip:${ip}`, 20, 15 * 60 * 1000);
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
+      enforceRateLimit(`password-login:user:${String(body.username || '').trim().toLowerCase()}`, 8, 15 * 60 * 1000);
+      const session = authService.login(body);
       res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
       return sendJson(res, 200, { ok: true, user: session.user });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/start') {
-      const body = JSON.parse(await parseBody(req));
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
       const ip = getClientIp(req);
       const emailKey = String(body.email || '').trim().toLowerCase();
       enforceRateLimit(`email-start:ip:${ip}`, 30, 15 * 60 * 1000);
@@ -99,7 +109,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/verify') {
-      const body = JSON.parse(await parseBody(req));
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
       const ip = getClientIp(req);
       const emailKey = String(body.email || '').trim().toLowerCase();
       enforceRateLimit(`email-verify:ip:${ip}`, 60, 15 * 60 * 1000);
@@ -157,19 +167,19 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/capture') {
       enforceRateLimit(`capture:user:${user.id}`, 240, 15 * 60 * 1000);
-      const body = JSON.parse(await parseBody(req));
+      const body = JSON.parse(await parseBody(req, 8 * 1024 * 1024));
       const result = await frameService.saveCapture(body, user.id, user.householdId);
       analyzeEventInBackground(result.event, body.image, petProfile.name);
       return sendJson(res, 200, { ok: true, ...result });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/events') {
-      const date = url.searchParams.get('date') || todayJst();
+      const date = validateDateParam(url.searchParams.get('date') || todayJst());
       return sendJson(res, 200, await frameService.listEvents(date, user.id, user.householdId));
     }
 
     if (req.method === 'GET' && url.pathname === '/api/timeline') {
-      const date = url.searchParams.get('date') || todayJst();
+      const date = validateDateParam(url.searchParams.get('date') || todayJst());
       const events = await frameService.listEvents(date, user.id, user.householdId);
       const profile = authService.getPetProfile(user.id, user.householdId);
       const timeline = await getCachedTimeline({ date, user, events, petName: profile.name || 'ペット' });
@@ -179,7 +189,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/timeline/chat') {
       enforceRateLimit(`timeline-chat:user:${user.id}`, 40, 15 * 60 * 1000);
       const body = JSON.parse(await parseBody(req, 32 * 1024));
-      const date = body.date || todayJst();
+      const date = validateDateParam(body.date || todayJst());
       const prompt = String(body.prompt || '').trim();
       if (!prompt) return sendJson(res, 400, { ok: false, error: 'prompt is required' });
       const events = await frameService.listEvents(date, user.id, user.householdId);
@@ -189,7 +199,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/latest') {
-      const date = url.searchParams.get('date') || todayJst();
+      const date = validateDateParam(url.searchParams.get('date') || todayJst());
       const events = await frameService.listEvents(date, user.id, user.householdId);
       const latest = [...events].reverse().find(event => event.file);
       return sendJson(res, 200, latest ? { ok: true, event: latest, imageUrl: `/${latest.file}` } : { ok: true, event: null, imageUrl: null });
@@ -200,7 +210,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'GET' && url.pathname === '/api/report') {
-      const date = url.searchParams.get('date') || todayJst();
+      const date = validateDateParam(url.searchParams.get('date') || todayJst());
       const saved = await reportService.getReport(date, { userId: user.id, householdId: user.householdId });
       return sendJson(res, 200, { ok: true, ...saved });
     }
@@ -514,7 +524,9 @@ function safeJoin(rootDir, requestedPath) {
 }
 
 function getClientIp(req) {
-  return String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+  const remoteAddress = String(req.socket.remoteAddress || 'unknown');
+  const isLocalProxy = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(remoteAddress);
+  return String((isLocalProxy && req.headers['cf-connecting-ip']) || remoteAddress)
     .split(',')[0]
     .trim();
 }
@@ -522,9 +534,21 @@ function getClientIp(req) {
 function verifyRequestOrigin(req) {
   if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return;
   const origin = req.headers.origin;
-  if (!origin) return;
+  if (!origin) throw new Error('invalid request origin');
   const allowed = new Set([config.appOrigin, config.marketingOrigin].map(value => String(value || '').replace(/\/$/, '')));
   if (!allowed.has(String(origin).replace(/\/$/, ''))) throw new Error('invalid request origin');
+}
+
+function verifySetupToken(token) {
+  if (authService.hasUsers()) return;
+  if (!config.setupToken) throw new Error('setup token is required');
+  if (String(token || '') !== config.setupToken) throw new Error('invalid setup token');
+}
+
+function validateDateParam(value) {
+  const date = String(value || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) throw new Error('invalid date');
+  return date;
 }
 
 function enforceRateLimit(key, maxRequests, windowMs) {

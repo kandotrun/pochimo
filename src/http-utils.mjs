@@ -19,7 +19,11 @@ export function parseBody(req, limitBytes = 8 * 1024 * 1024) {
 
     req.on('data', chunk => {
       size += chunk.length;
-      if (size > limitBytes) reject(new Error('payload too large'));
+      if (size > limitBytes) {
+        reject(new Error('payload too large'));
+        req.destroy();
+        return;
+      }
       chunks.push(chunk);
     });
 

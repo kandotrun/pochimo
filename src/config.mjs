@@ -11,6 +11,7 @@ export const config = {
   port: Number(process.env.PORT || 8787),
   marketingOrigin: process.env.PUBLIC_MARKETING_ORIGIN || 'https://pochimo.com',
   appOrigin: process.env.PUBLIC_APP_ORIGIN || 'https://diary.pochimo.com',
+  setupToken: process.env.SETUP_TOKEN || '',
   dataDir: path.join(rootDir, 'data'),
   publicDir: path.join(rootDir, 'public'),
   mail: {

@@ -3,6 +3,8 @@ import { ensureDir, readJson, writeJson } from './json-store.mjs';
 import { timestampJst, todayJst } from './time.mjs';
 import { promises as fs } from 'node:fs';
 
+const MAX_CAPTURE_BYTES = 6 * 1024 * 1024;
+
 export class FrameService {
   constructor({ dataDir, framesDir }) {
     this.dataDir = dataDir;
@@ -20,6 +22,8 @@ export class FrameService {
     const dateDir = path.join(this.framesDir, date);
     const filename = `${stamp}.jpg`;
     const imageBytes = Buffer.from(body.image.split(',')[1], 'base64');
+    if (imageBytes.length > MAX_CAPTURE_BYTES) throw new Error('image too large');
+    if (imageBytes[0] !== 0xff || imageBytes[1] !== 0xd8) throw new Error('image must be jpeg');
 
     await ensureDir(dateDir);
     await fs.writeFile(path.join(dateDir, filename), imageBytes);
