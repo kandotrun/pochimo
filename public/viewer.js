@@ -12,6 +12,10 @@ const latestImage = document.getElementById('latestImage');
 const latestOverlay = document.getElementById('latestOverlay');
 const latestEmpty = document.getElementById('latestEmpty');
 const latestMeta = document.getElementById('latestMeta');
+const timelineModeLabel = document.getElementById('timelineModeLabel');
+const timelineChatForm = document.getElementById('timelineChatForm');
+const timelineChatInput = document.getElementById('timelineChatInput');
+const timelineChatSubmit = document.getElementById('timelineChatSubmit');
 
 latestImage.addEventListener('load', () => applyAdaptivePhotoEnhancement(latestImage));
 latestImage.addEventListener('load', () => {
@@ -28,6 +32,7 @@ let initialLoading = true;
 let timelineRequest = null;
 let currentLatestSrc = '';
 let hasRenderedTimeline = false;
+let timelineMode = parseTimelinePrompt('');
 
 async function refreshAll() {
   if (initialLoading) renderSkeletons();
@@ -54,14 +59,14 @@ async function refreshTimeline() {
     .then(async events => {
     if (date !== selectedDate) return;
     latestEvents = events;
-    renderTimeline(latestEvents);
+    renderTimeline(latestEvents, { mode: timelineMode });
     hasRenderedTimeline = true;
 
     const timeline = await fetchWithTimeout(`/api/timeline?date=${encodeURIComponent(date)}`, 8000)
       .then(res => res.json())
       .catch(() => null);
     if (date !== selectedDate || !timeline?.items?.length) return;
-    renderTimeline(timeline.items, { edited: true });
+    renderTimeline(timeline.items, { edited: true, mode: timelineMode });
   }).finally(() => {
     timelineRequest = null;
   });
@@ -267,9 +272,10 @@ function renderTimeline(events, options = {}) {
     return;
   }
 
+  const mode = options.mode || timelineMode;
   const shown = options.edited
-    ? bucketTimelineItems(events).slice(-80).reverse()
-    : bucketTimelineItems(groupTimelineEvents(events.filter(shouldShowTimelineEvent))).slice(-80).reverse();
+    ? applyTimelineMode(events, mode).slice(-80).reverse()
+    : applyTimelineMode(groupTimelineEvents(events.filter(shouldShowTimelineEvent)), mode).slice(-80).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -308,6 +314,15 @@ function renderTimeline(events, options = {}) {
   }).join('');
 }
 
+function applyTimelineMode(items, mode) {
+  let filtered = items;
+  if (mode.timeRange) filtered = filtered.filter(item => overlapsTimelineRange(item, mode.timeRange));
+  if (mode.importantOnly) {
+    filtered = filtered.filter(item => item.notify || item.importance === 'high' || item.activityCategory === 'mischief' || item.category === 'mischief');
+  }
+  return bucketTimelineItems(filtered, mode.bucketMinutes);
+}
+
 function cleanTimelineText(text) {
   return String(text || '')
     .replace(/^写真を保存しました[。.]?$/, '')
@@ -344,10 +359,10 @@ function groupTimelineEvents(events) {
   return groups;
 }
 
-function bucketTimelineItems(items) {
+function bucketTimelineItems(items, bucketMinutes = 10) {
   const buckets = new Map();
   for (const item of items) {
-    const key = tenMinuteBucketKey(item.startTime || item.time);
+    const key = timelineBucketKey(item.startTime || item.time, bucketMinutes);
     const bucket = buckets.get(key) || [];
     bucket.push(item);
     buckets.set(key, bucket);
@@ -386,12 +401,62 @@ function summarizeTimelineBucket(key, items) {
   };
 }
 
-function tenMinuteBucketKey(time) {
+function timelineBucketKey(time, bucketMinutes = 10) {
   const value = String(time || '');
   const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})/);
   if (!match) return value;
-  const minute = String(Math.floor(Number(match[3]) / 10) * 10).padStart(2, '0');
+  const minute = String(Math.floor(Number(match[3]) / bucketMinutes) * bucketMinutes).padStart(2, '0');
   return `${match[1]}T${match[2]}-${minute}-00`;
+}
+
+function parseTimelinePrompt(prompt) {
+  const text = String(prompt || '').trim();
+  const timeRange = parseTimelineTimeRange(text);
+  if (/重要|大事|通知|危険|イタズラ|必要|需要|絞/.test(text)) {
+    return { bucketMinutes: 20, importantOnly: true, timeRange, label: `${timeRange ? timeRange.label + 'の' : ''}重要なものだけを表示しています。` };
+  }
+  if (/細か|詳し|全部|詳細|もっと見/.test(text)) {
+    return { bucketMinutes: 3, importantOnly: false, timeRange, label: `${timeRange ? timeRange.label + 'を' : ''}少し細かく、3分単位で表示しています。` };
+  }
+  if (/ざっくり|粗く|少なく|まとめ|標準|戻/.test(text)) {
+    return { bucketMinutes: 10, importantOnly: false, label: '標準: 10分単位で見やすくまとめています。' };
+  }
+  if (timeRange) return { bucketMinutes: 10, importantOnly: false, timeRange, label: `${timeRange.label}だけを表示しています。` };
+  return { bucketMinutes: 10, importantOnly: false, label: '標準: 10分単位で見やすくまとめています。' };
+}
+
+function parseTimelineTimeRange(text) {
+  const value = String(text || '');
+  if (/朝/.test(value)) return { start: 5, end: 11, label: '朝' };
+  if (/昼|日中/.test(value)) return { start: 11, end: 15, label: '昼' };
+  if (/夕方|夕/.test(value)) return { start: 15, end: 19, label: '夕方' };
+  if (/夜/.test(value)) return { start: 19, end: 24, label: '夜' };
+  const match = value.match(/(\d{1,2})時/);
+  if (match) {
+    const hour = Math.max(0, Math.min(23, Number(match[1])));
+    return { start: hour, end: hour + 1, label: `${hour}時台` };
+  }
+  return null;
+}
+
+function overlapsTimelineRange(item, range) {
+  const startHour = timelineHour(item.startTime || item.time);
+  const endHour = timelineHour(item.endTime || item.time || item.startTime);
+  if (startHour === null && endHour === null) return true;
+  const start = startHour ?? endHour;
+  const end = endHour ?? startHour;
+  return start < range.end && end >= range.start;
+}
+
+function timelineHour(time) {
+  const match = String(time || '').match(/T(\d{2})[-:]/);
+  return match ? Number(match[1]) : null;
+}
+
+function applyTimelinePrompt(prompt) {
+  timelineMode = parseTimelinePrompt(prompt);
+  timelineModeLabel.textContent = timelineMode.label;
+  renderTimeline(latestEvents, { mode: timelineMode });
 }
 
 function shouldMergeTimelineEvents(group, event) {
@@ -561,6 +626,23 @@ dateDisplayBtn.addEventListener('click', () => {
 });
 dateInput.addEventListener('change', event => {
   if (event.target.value) setSelectedDate(event.target.value);
+});
+
+timelineChatForm.addEventListener('submit', event => {
+  event.preventDefault();
+  const prompt = timelineChatInput.value.trim();
+  if (!prompt) return;
+  timelineChatSubmit.disabled = true;
+  applyTimelinePrompt(prompt);
+  setTimeout(() => { timelineChatSubmit.disabled = false; }, 180);
+});
+
+document.querySelectorAll('[data-timeline-prompt]').forEach(button => {
+  button.addEventListener('click', () => {
+    const prompt = button.dataset.timelinePrompt || '';
+    timelineChatInput.value = prompt;
+    applyTimelinePrompt(prompt);
+  });
 });
 
 async function refreshReport() {

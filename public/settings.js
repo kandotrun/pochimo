@@ -40,6 +40,7 @@ function renderPetProfile() {
   settingsLead.textContent = name ? `${name}のプロフィールを設定できます。` : 'ペットの名前と写真を登録できます。';
 
   petAvatar.classList.remove('skeleton');
+  profileStatus.textContent = name ? '保存済みです。' : '名前を入力すると自動保存されます。';
   if (petProfile.photo) {
     petAvatar.textContent = '';
     petAvatar.style.backgroundImage = `url(${petProfile.photo})`;

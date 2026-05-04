@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>表示</title>
-  <link rel="stylesheet" href="/style.css?v=20260504-23" />
+  <link rel="stylesheet" href="/style.css?v=20260504-24" />
 </head>
 <body>
   <main class="app-shell with-tabs">
@@ -49,7 +49,17 @@
       <div class="section-head">
         <div>
           <h2>今日の記録</h2>
+          <p id="timelineModeLabel" class="section-description">標準: 10分単位で見やすくまとめています。</p>
         </div>
+      </div>
+      <form id="timelineChatForm" class="timeline-chat" autocomplete="off">
+        <input id="timelineChatInput" type="text" placeholder="例: もっと細かく / 重要なものだけ / 夕方だけ詳しく" />
+        <button id="timelineChatSubmit" class="secondary" type="submit">編集</button>
+      </form>
+      <div class="timeline-suggestions" aria-label="よく使う編集">
+        <button type="button" data-timeline-prompt="標準に戻して">標準</button>
+        <button type="button" data-timeline-prompt="もう少し細かく見せて">細かく</button>
+        <button type="button" data-timeline-prompt="重要なものだけにして">重要だけ</button>
       </div>
       <div id="timeline" class="timeline empty">まだ記録がありません。</div>
     </section>
@@ -64,6 +74,6 @@
       <div id="report" class="report-placeholder">22時になると、その日のふりかえりが表示されます。</div>
     </section>
   </main>
-  <script src="/viewer.js?v=20260504-23"></script>
+  <script src="/viewer.js?v=20260504-24"></script>
 </body>
 </html>
