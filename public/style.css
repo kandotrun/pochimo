@@ -533,6 +533,23 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   object-position: top;
   border-radius: 22px;
 }
+.lp-preview-photo {
+  aspect-ratio: 16 / 10;
+  max-height: none;
+  object-position: center;
+}
+.lp-log-mock {
+  display: grid;
+  grid-template-columns: 54px 1fr;
+  gap: 10px;
+  margin-top: 12px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--card);
+}
+.lp-log-mock span { color: var(--muted-foreground); font-size: 13px; }
+.lp-log-mock p { margin: 0; font-weight: 700; line-height: 1.55; }
 .lp-photo-stack {
   display: grid;
   gap: 14px;
