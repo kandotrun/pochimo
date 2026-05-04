@@ -20,6 +20,8 @@ let petProfile = {};
 let selectedDate = todayString();
 let initialLoading = true;
 let timelineRequest = null;
+let currentLatestSrc = '';
+let hasRenderedTimeline = false;
 
 async function refreshAll() {
   if (initialLoading) renderSkeletons();
@@ -39,7 +41,7 @@ function renderSkeletons() {
 
 async function refreshTimeline() {
   if (timelineRequest) return timelineRequest;
-  renderTimelineGenerating();
+  if (!hasRenderedTimeline) renderTimelineGenerating();
   const date = selectedDate;
   timelineRequest = Promise.all([
     fetch(`/api/events?date=${encodeURIComponent(date)}`).then(res => res.json()),
@@ -48,6 +50,7 @@ async function refreshTimeline() {
     if (date !== selectedDate) return;
     latestEvents = events;
     renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
+    hasRenderedTimeline = true;
   }).finally(() => {
     timelineRequest = null;
   });
@@ -76,6 +79,7 @@ async function refreshLatest() {
   const json = await fetch(`/api/latest?date=${encodeURIComponent(selectedDate)}`).then(res => res.json());
   if (!json.imageUrl || !json.event) {
     latestImage.hidden = true;
+    currentLatestSrc = '';
     resetPhotoEnhancement(latestImage);
     latestOverlay.hidden = true;
     latestOverlay.innerHTML = '';
@@ -84,7 +88,12 @@ async function refreshLatest() {
     return;
   }
 
-  latestImage.src = `${json.imageUrl}?v=${encodeURIComponent(json.event.time)}`;
+  const nextSrc = `${json.imageUrl}?v=${encodeURIComponent(json.event.time)}`;
+  if (currentLatestSrc !== nextSrc) {
+    if (!currentLatestSrc) latestEmpty.innerHTML = '<div class="skeleton skeleton-latest"></div>';
+    latestImage.src = nextSrc;
+    currentLatestSrc = nextSrc;
+  }
   latestImage.hidden = false;
   latestEmpty.hidden = true;
   latestMeta.textContent = `${formatEventTime(json.event.time)} に撮影`;
@@ -410,6 +419,8 @@ function updateDateControls() {
 
 function setSelectedDate(date) {
   selectedDate = date;
+  currentLatestSrc = '';
+  hasRenderedTimeline = false;
   updateDateControls();
   reportEl.classList.add('report-placeholder');
   reportEl.textContent = '22時になると、その日のふりかえりが表示されます。';

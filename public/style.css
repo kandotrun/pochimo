@@ -225,6 +225,8 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   display: grid;
   place-items: center;
   width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 220px;
   max-height: 58vh;
   overflow: hidden;
   background: var(--muted);
@@ -235,7 +237,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   grid-area: 1 / 1;
   display: block;
   width: 100%;
-  height: auto;
+  height: 100%;
   max-height: 58vh;
   object-fit: contain;
   filter: brightness(var(--photo-brightness, 1)) contrast(var(--photo-contrast, 1)) saturate(var(--photo-saturate, 1));
@@ -363,6 +365,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .timeline-photo {
   display: block;
   width: 100%;
+  aspect-ratio: 16 / 9;
+  min-height: 150px;
+  height: auto;
   max-height: 220px;
   margin-bottom: 10px;
   object-fit: cover;
