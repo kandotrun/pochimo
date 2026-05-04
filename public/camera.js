@@ -4,10 +4,10 @@ const statusEl = document.getElementById('status');
 const burstStatusEl = document.getElementById('burstStatus');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
-const intervalSec = document.getElementById('intervalSec');
 const recordBadge = document.getElementById('recordBadge');
 
 const MOTION_CHECK_MS = 1000;
+const NORMAL_CAPTURE_INTERVAL_MS = 15000;
 const BURST_INTERVAL_MS = 1000;
 const BURST_DURATION_MS = 30000;
 const MOTION_THRESHOLD = 12;
@@ -82,14 +82,12 @@ async function captureTick() {
 
   const now = Date.now();
   const payload = captureFrame();
-  const normalIntervalMs = Number(intervalSec.value) * 1000;
-
   if (payload.motionScore >= MOTION_THRESHOLD) {
     burstUntil = Math.max(burstUntil, now + BURST_DURATION_MS);
   }
 
   const inBurst = now < burstUntil;
-  const saveIntervalMs = inBurst ? BURST_INTERVAL_MS : normalIntervalMs;
+  const saveIntervalMs = inBurst ? BURST_INTERVAL_MS : NORMAL_CAPTURE_INTERVAL_MS;
   const shouldSave = now >= nextSaveAt;
 
   setBurstStatus(inBurst

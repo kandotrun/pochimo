@@ -327,9 +327,9 @@ function groupTimelineEvents(events) {
       previous.events.push(event);
       previous.endTime = event.time;
       previous.time = event.time;
-      if (isQuietRestCategory(previous.activityCategory) && isQuietRestCategory(event.activityCategory)) {
+      if (isDailyLifeCategory(previous.activityCategory) && isDailyLifeCategory(event.activityCategory)) {
         previous.activityCategory = 'rest';
-        previous.activityLabel = '休憩中';
+        previous.activityLabel = '過ごしている';
       }
       previous.motionScore = Math.max(Number(previous.motionScore || 0), Number(event.motionScore || 0));
       previous.notify = Boolean(previous.notify || event.notify);
@@ -348,21 +348,22 @@ function shouldMergeTimelineEvents(group, event) {
   const last = group.events.at(-1);
   if (!last) return false;
   const sameCategory = last.activityCategory === event.activityCategory
-    || (isQuietRestCategory(last.activityCategory) && isQuietRestCategory(event.activityCategory));
+    || (isDailyLifeCategory(last.activityCategory) && isDailyLifeCategory(event.activityCategory));
   if (!sameCategory) return false;
 
   const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(last.time)) / 60000;
   if (last.notify || event.notify) return minutes <= 20 && sameTimelinePlace(last, event);
 
   const quietCategories = ['not_visible', 'unknown'];
-  if (isQuietRestCategory(event.activityCategory) || quietCategories.includes(event.activityCategory)) return minutes <= 45 && sameTimelinePlace(last, event);
+  if (isDailyLifeCategory(event.activityCategory)) return minutes <= 90 && sameTimelinePlace(last, event);
+  if (quietCategories.includes(event.activityCategory)) return minutes <= 45 && sameTimelinePlace(last, event);
   if (minutes > 25) return false;
 
   return normalizeTimelineText(last.timelineText) === normalizeTimelineText(event.timelineText);
 }
 
-function isQuietRestCategory(category) {
-  return ['sleep', 'rest'].includes(category);
+function isDailyLifeCategory(category) {
+  return ['sleep', 'rest', 'moving'].includes(category);
 }
 
 function sameTimelinePlace(a, b) {
@@ -373,8 +374,13 @@ function sameTimelinePlace(a, b) {
 
 function placeFromTimelineText(text) {
   const value = String(text || '');
-  const places = ['ケージの中', 'テーブルの下', '椅子の上', '椅子の近く', '床の上', 'クッションのあたり', 'キャリーケースのあたり'];
-  return places.find(place => value.includes(place)) || '';
+  if (value.includes('ケージ')) return 'ケージの中';
+  if (value.includes('テーブルの下')) return 'テーブルの下';
+  if (value.includes('椅子')) return '椅子の上';
+  if (value.includes('床')) return '床の上';
+  if (value.includes('クッション')) return 'クッションのあたり';
+  if (value.includes('キャリー')) return 'キャリーケースのあたり';
+  return '';
 }
 
 function summarizeTimelineGroup(events) {
@@ -383,7 +389,7 @@ function summarizeTimelineGroup(events) {
   if (events.length < 2) return text;
 
   const label = latest.activityLabel || categoryLabel(latest.activityCategory);
-  if (isQuietRestCategory(latest.activityCategory)) return `${label}: しばらく同じ場所で休んでいます。`;
+  if (isDailyLifeCategory(latest.activityCategory)) return `${label}: しばらく同じ場所で過ごしています。`;
   if (latest.activityCategory === 'not_visible') return `${label}: しばらく姿が確認しづらい状態です。`;
   return text;
 }
