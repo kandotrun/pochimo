@@ -500,23 +500,32 @@ async function askTimelineAi(prompt) {
 function shouldMergeTimelineEvents(group, event) {
   const last = group.events.at(-1);
   if (!last) return false;
+  const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(last.time)) / 60000;
+  const samePlace = sameTimelinePlace(last, event);
+  if (minutes <= 6 && samePlace && !isQuietVisibleFlip(last, event)) return true;
+
   const sameCategory = last.activityCategory === event.activityCategory
     || (isDailyLifeCategory(last.activityCategory) && isDailyLifeCategory(event.activityCategory));
   if (!sameCategory) return false;
 
-  const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(last.time)) / 60000;
-  if (last.notify || event.notify) return minutes <= 20 && sameTimelinePlace(last, event);
+  if (last.notify || event.notify) return minutes <= 20 && samePlace;
 
   const quietCategories = ['not_visible', 'unknown'];
-  if (isDailyLifeCategory(event.activityCategory)) return minutes <= 90 && sameTimelinePlace(last, event);
-  if (quietCategories.includes(event.activityCategory)) return minutes <= 45 && sameTimelinePlace(last, event);
+  if (isDailyLifeCategory(event.activityCategory)) return minutes <= 90 && samePlace;
+  if (quietCategories.includes(event.activityCategory)) return minutes <= 45 && samePlace;
   if (minutes > 25) return false;
 
   return normalizeTimelineText(last.timelineText) === normalizeTimelineText(event.timelineText);
 }
 
 function isDailyLifeCategory(category) {
-  return ['sleep', 'rest', 'moving'].includes(category);
+  return ['sleep', 'rest', 'moving', 'near_owner', 'play'].includes(category);
+}
+
+function isQuietVisibleFlip(a, b) {
+  const aQuiet = ['not_visible', 'unknown'].includes(a.activityCategory);
+  const bQuiet = ['not_visible', 'unknown'].includes(b.activityCategory);
+  return aQuiet !== bQuiet;
 }
 
 function sameTimelinePlace(a, b) {
@@ -542,6 +551,8 @@ function summarizeTimelineGroup(events) {
   if (events.length < 2) return text;
 
   const label = latest.activityLabel || categoryLabel(latest.activityCategory);
+  const important = events.find(event => event.notify || event.activityCategory === 'mischief');
+  if (important) return important.timelineText || important.notificationText || `${important.activityLabel || '気になる動き'}: 確認したい動きがありました。`;
   if (isDailyLifeCategory(latest.activityCategory)) return `${label}: しばらく同じ場所で過ごしています。`;
   if (latest.activityCategory === 'not_visible') return `${label}: しばらく姿が確認しづらい状態です。`;
   return text;

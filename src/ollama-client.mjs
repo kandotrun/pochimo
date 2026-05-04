@@ -525,13 +525,14 @@ function tenMinuteBucketKey(time) {
 function shouldMergeFallbackTimelineEvents(previous, event, category) {
   const last = previous.events.at(-1);
   if (!last) return false;
-  const sameCategory = previous.category === category || (isDailyLifeCategory(previous.category) && isDailyLifeCategory(category));
-  if (!sameCategory) return false;
-
   const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(previous.endTime)) / 60000;
   const previousPlace = placeFromScene(previous.detail || previous.title || '');
   const eventPlace = placeFromScene(event.ai?.scene || event.timelineText || '');
   const samePlace = !previousPlace || !eventPlace || previousPlace === eventPlace;
+  if (minutes <= 6 && samePlace && !isQuietVisibleFlip(previous.category, category)) return true;
+
+  const sameCategory = previous.category === category || (isDailyLifeCategory(previous.category) && isDailyLifeCategory(category));
+  if (!sameCategory) return false;
 
   if (!samePlace) return false;
   if (previous.notify || event.notify) return minutes <= 20;
@@ -541,7 +542,13 @@ function shouldMergeFallbackTimelineEvents(previous, event, category) {
 }
 
 function isDailyLifeCategory(category) {
-  return ['sleep', 'rest', 'moving'].includes(category);
+  return ['sleep', 'rest', 'moving', 'near_owner', 'play'].includes(category);
+}
+
+function isQuietVisibleFlip(aCategory, bCategory) {
+  const aQuiet = ['not_visible', 'unknown'].includes(aCategory);
+  const bQuiet = ['not_visible', 'unknown'].includes(bCategory);
+  return aQuiet !== bQuiet;
 }
 
 function naturalTimelineTitle(event, petName) {
