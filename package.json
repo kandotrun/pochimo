@@ -4,13 +4,19 @@
   "type": "module",
   "scripts": {
     "dev": "npm --prefix diary run dev",
+    "dev:node": "npm --prefix diary run dev:node",
     "start": "npm --prefix diary run start",
+    "start:node": "npm --prefix diary run start:node",
+    "typecheck": "npm --prefix diary run typecheck",
+    "check": "npm --prefix diary run check",
+    "format": "npm --prefix diary run format",
     "report": "npm --prefix diary run report"
   },
   "workspaces": [
     "diary"
   ],
   "engines": {
+    "bun": ">=1.1.0",
     "node": ">=20"
   }
 }

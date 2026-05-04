@@ -1,12 +1,15 @@
-import { DatabaseSync } from 'node:sqlite';
 import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
+
+const DatabaseDriver = globalThis.Bun
+  ? (await import('bun:sqlite')).Database
+  : (await import('node:sqlite')).DatabaseSync;
 
 const SESSION_DAYS = 30;
 
 export class AuthService {
   constructor({ dataDir }) {
-    this.db = new DatabaseSync(path.join(dataDir, 'auth.sqlite'));
+    this.db = new DatabaseDriver(path.join(dataDir, 'auth.sqlite'));
     this.#migrate();
   }
 
