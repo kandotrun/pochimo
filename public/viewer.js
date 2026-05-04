@@ -268,8 +268,8 @@ function renderTimeline(events, options = {}) {
   }
 
   const shown = options.edited
-    ? events.slice(0, 120)
-    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(0, 120);
+    ? events.slice(-120).reverse()
+    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-120).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -291,6 +291,8 @@ function renderTimeline(events, options = {}) {
       ? observation.petVisible === true ? 'ペットが見えます' : observation.petVisible === false ? 'ペットは見えません' : '確認中'
       : event.aiStatus === 'analyzing' ? '確認中' : '';
     const detail = cleanTimelineText(event.detail || observation?.scene || '');
+    const imageSrc = event.imageUrl || (event.file ? `/${event.file}` : '');
+    const imageVersion = event.imageTime || event.time || event.endTime || event.startTime || '';
 
     const badge = shouldShowCategoryBadge(category)
       ? `<span class="category-badge">${escapeHtml(category)}</span>`
@@ -301,7 +303,7 @@ function renderTimeline(events, options = {}) {
         <time class="timeline-time">${escapeHtml(formatTimelineTime(event))}</time>
         <span class="timeline-dot ${level}"></span>
         <div class="timeline-body">
-          ${event.imageUrl ? `<img class="timeline-photo" src="${escapeHtml(event.imageUrl)}?v=${encodeURIComponent(event.imageTime || event.time || '')}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
+          ${imageSrc ? `<img class="timeline-photo" src="${escapeHtml(imageSrc)}?v=${encodeURIComponent(imageVersion)}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
           <p class="timeline-meta">${escapeHtml([pet, detail, event.notify ? '通知対象' : ''].filter(Boolean).join(' ・ '))}</p>
         </div>
