@@ -2,7 +2,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { config, paths } from './src/config.mjs';
-import { ensureDir } from './src/json-store.mjs';
+import { ensureDir, readJson, writeJson } from './src/json-store.mjs';
 import { FrameService } from './src/frame-service.mjs';
 import { OllamaClient } from './src/ollama-client.mjs';
 import { ReportService } from './src/report-service.mjs';
@@ -532,11 +532,13 @@ function startDailyReportScheduler() {
     const hour = value('hour');
     const minute = value('minute');
 
-    if (hour !== '22' || minute !== '00' || lastRunDate === date) return;
-    lastRunDate = date;
-    await createReportsForAllUsers(date).catch(err => {
+    const shouldRun = Number(hour) > 22 || (hour === '22' && Number(minute) >= 0);
+    if (!shouldRun || lastRunDate === date) return;
+    const ok = await createReportsForAllUsers(date).then(() => true).catch(err => {
       console.warn(`daily report failed: ${err.message}`);
+      return false;
     });
+    if (ok) lastRunDate = date;
   };
 
   setInterval(tick, 30 * 1000);
@@ -548,6 +550,7 @@ async function createReportsForAllUsers(date) {
   for (const user of authService.listUsers()) {
     const householdId = user.householdId || user.id;
     if (reportedHouseholds.has(householdId)) continue;
+    if (await wasDailyReportMailSent(date, householdId)) continue;
 
     const profile = authService.getPetProfile(user.id, householdId);
     if (!profile?.name?.trim()) continue;
@@ -559,7 +562,24 @@ async function createReportsForAllUsers(date) {
     });
     reportedHouseholds.add(householdId);
     await sendDailyReportMail({ date, user, householdId, petName: profile.name, ...result });
+    await markDailyReportMailSent(date, householdId);
   }
+}
+
+async function wasDailyReportMailSent(date, householdId) {
+  const state = await readJson(dailyReportMailStatePath(date), {});
+  return Boolean(state[String(householdId)]?.sentAt);
+}
+
+async function markDailyReportMailSent(date, householdId) {
+  const file = dailyReportMailStatePath(date);
+  const state = await readJson(file, {});
+  state[String(householdId)] = { sentAt: new Date().toISOString() };
+  await writeJson(file, state);
+}
+
+function dailyReportMailStatePath(date) {
+  return path.join(paths.reportsDir, `${date}.mail-state.json`);
 }
 
 async function sendDailyReportMail({ date, user, householdId, petName, report, markdown }) {
