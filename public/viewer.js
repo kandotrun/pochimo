@@ -321,7 +321,7 @@ function applyTimelineMode(items, mode) {
   if (mode.importantOnly) {
     filtered = filtered.filter(item => item.notify || item.importance === 'high' || item.activityCategory === 'mischief' || item.category === 'mischief');
   }
-  return bucketTimelineItems(filtered, mode.bucketMinutes);
+  return mode.bucketMinutes ? bucketTimelineItems(filtered, mode.bucketMinutes) : filtered;
 }
 
 function cleanTimelineText(text) {
@@ -420,10 +420,10 @@ function parseTimelinePrompt(prompt) {
     return { bucketMinutes: 3, importantOnly: false, timeRange, label: `${timeRange ? timeRange.label + 'を' : ''}少し細かく、3分単位で表示しています。` };
   }
   if (/ざっくり|粗く|少なく|まとめ|標準|戻/.test(text)) {
-    return { bucketMinutes: 10, importantOnly: false, label: '標準: 10分単位で見やすくまとめています。' };
+    return { bucketMinutes: null, importantOnly: false, label: 'AIが今日の中から、変化や行動が分かる場面を探して表示しています。' };
   }
   if (timeRange) return { bucketMinutes: 10, importantOnly: false, timeRange, label: `${timeRange.label}だけを表示しています。` };
-  return { bucketMinutes: 10, importantOnly: false, label: '標準: 10分単位で見やすくまとめています。' };
+  return { bucketMinutes: null, importantOnly: false, label: 'AIが今日の中から、変化や行動が分かる場面を探して表示しています。' };
 }
 
 function parseTimelineTimeRange(text) {

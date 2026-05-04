@@ -188,7 +188,7 @@ ${JSON.stringify(compactEvents)}`;
 
       const raw = data.choices?.[0]?.message?.content || '';
       const parsed = extractJson(raw);
-      const items = bucketTimelineItems(normalizeTimelineItems(parsed.items, events), petName);
+      const items = normalizeTimelineItems(parsed.items, events);
       return { enabled: true, model: this.cloudReportModel, items: items.length ? items : fallback, raw: String(raw).trim() };
     } catch (err) {
       return { enabled: false, model: this.cloudReportModel, items: fallback, summary: `LLMタイムライン生成に失敗: ${err.message}` };
