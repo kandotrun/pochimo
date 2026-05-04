@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=LINE+Seed+JP:wght@400;500;600;700;800&display=swap');
 
 :root {
   color-scheme: light;
@@ -92,6 +92,7 @@ body {
 }
 h1, h2 { margin: 0; color: var(--foreground); letter-spacing: -.035em; }
 h1 { font-size: clamp(32px, 7vw, 52px); line-height: 1; font-weight: 800; }
+#pageTitle { font-weight: 800; }
 h2 { font-size: 22px; font-weight: 700; }
 .lead { margin: 10px 0 0; color: var(--muted-foreground); line-height: 1.65; max-width: 640px; }
 
