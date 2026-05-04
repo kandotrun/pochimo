@@ -11,6 +11,7 @@ import { serveStatic } from './src/static-files.mjs';
 import { todayJst } from './src/time.mjs';
 import { AuthService, clearSessionCookie, parseCookies, sessionCookie } from './src/auth-service.mjs';
 import { AbService } from './src/ab-service.mjs';
+import { mailService } from './src/mail-service.mjs';
 
 await ensureDir(paths.framesDir);
 await ensureDir(paths.reportsDir);
@@ -79,6 +80,19 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/auth/login') {
       const session = authService.login(JSON.parse(await parseBody(req)));
+      res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
+      return sendJson(res, 200, { ok: true, user: session.user });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/auth/email/start') {
+      const body = JSON.parse(await parseBody(req));
+      const loginCode = authService.createEmailLoginCode(body);
+      await sendLoginCodeMail(loginCode);
+      return sendJson(res, 200, { ok: true, email: loginCode.email, expiresAt: loginCode.expiresAt });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/auth/email/verify') {
+      const session = authService.verifyEmailLoginCode(JSON.parse(await parseBody(req)));
       res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
       return sendJson(res, 200, { ok: true, user: session.user });
     }
@@ -200,6 +214,22 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
   });
 }
 
+async function sendLoginCodeMail({ email, code }) {
+  await mailService.sendMail({
+    to: email,
+    subject: 'ぽちも日報のログインコード',
+    text: `ぽちも日報のログインコードは ${code} です。\n\n10分以内に入力してください。`,
+    html: `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; line-height: 1.7; color: #18181b;">
+        <p>ぽちも日報のログインコードです。</p>
+        <p style="font-size: 32px; font-weight: 800; letter-spacing: 0.18em; margin: 20px 0;">${code}</p>
+        <p>10分以内に入力してください。</p>
+      </div>
+    `,
+    tags: [{ name: 'type', value: 'login_code' }]
+  });
+}
+
 async function serveFrame(pathname, res, userId, householdId) {
   const relative = pathname.replace(/^\/data\/frames\//, '');
   const filePath = path.normalize(path.join(paths.framesDir, relative));
@@ -267,7 +297,9 @@ function isPublicPath(pathname) {
     || pathname === '/api/auth/state'
     || pathname === '/api/auth/setup'
     || pathname === '/api/auth/register'
-    || pathname === '/api/auth/login';
+    || pathname === '/api/auth/login'
+    || pathname === '/api/auth/email/start'
+    || pathname === '/api/auth/email/verify';
 }
 
 function redirect(res, location) {

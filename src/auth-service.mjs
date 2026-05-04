@@ -1,5 +1,5 @@
 import { DatabaseSync } from 'node:sqlite';
-import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomInt, scryptSync, timingSafeEqual } from 'node:crypto';
 import path from 'node:path';
 
 const SESSION_DAYS = 30;
@@ -42,7 +42,17 @@ export class AuthService {
         FOREIGN KEY(created_by) REFERENCES users(id) ON DELETE CASCADE,
         FOREIGN KEY(used_by) REFERENCES users(id) ON DELETE SET NULL
       );
+      CREATE TABLE IF NOT EXISTS login_codes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        email TEXT NOT NULL,
+        code_hash TEXT NOT NULL,
+        invite_code TEXT,
+        expires_at INTEGER NOT NULL,
+        consumed_at TEXT,
+        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_login_codes_email ON login_codes(email, expires_at);
     `);
 
     this.#ensureColumn('users', 'household_id', 'INTEGER');
@@ -93,6 +103,78 @@ export class AuthService {
     return { id, username: username.trim(), householdId: householdId || id };
   }
 
+  createEmailLoginCode({ email, inviteCode = '' }) {
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedInvite = String(inviteCode || '').trim();
+
+    const user = this.db.prepare('SELECT id FROM users WHERE username = ?').get(normalizedEmail);
+    if (!user && this.hasUsers()) {
+      if (!normalizedInvite) throw new Error('account not found');
+      const invite = this.db.prepare('SELECT code, used_by FROM invites WHERE code = ?').get(normalizedInvite);
+      if (!invite || invite.used_by) throw new Error('invalid invite code');
+    }
+
+    const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    this.db.prepare('DELETE FROM login_codes WHERE expires_at < ? OR consumed_at IS NOT NULL').run(Date.now());
+    this.db.prepare('INSERT INTO login_codes (email, code_hash, invite_code, expires_at) VALUES (?, ?, ?, ?)')
+      .run(normalizedEmail, hashPassword(code), normalizedInvite || null, expiresAt);
+
+    return { email: normalizedEmail, code, expiresAt };
+  }
+
+  verifyEmailLoginCode({ email, code, inviteCode = '' }) {
+    const normalizedEmail = normalizeEmail(email);
+    validateLoginCode(code);
+    const normalizedInvite = String(inviteCode || '').trim();
+
+    const rows = this.db.prepare(`
+      SELECT id, code_hash AS codeHash, invite_code AS inviteCode, expires_at AS expiresAt
+      FROM login_codes
+      WHERE email = ? AND consumed_at IS NULL AND expires_at > ?
+      ORDER BY id DESC
+      LIMIT 5
+    `).all(normalizedEmail, Date.now());
+    const loginCode = rows.find(row => String(row.inviteCode || '') === normalizedInvite && verifyPassword(code, row.codeHash));
+    if (!loginCode) throw new Error('invalid or expired code');
+
+    this.db.prepare('UPDATE login_codes SET consumed_at = CURRENT_TIMESTAMP WHERE id = ?').run(loginCode.id);
+
+    let user = this.db.prepare('SELECT id, username, household_id AS householdId FROM users WHERE username = ?').get(normalizedEmail);
+    if (!user) {
+      if (!this.hasUsers()) {
+        user = this.#createEmailUser({ email: normalizedEmail });
+      } else {
+        user = this.#createEmailUserWithInvite({ email: normalizedEmail, inviteCode: normalizedInvite });
+      }
+    }
+
+    return this.#createSession(user);
+  }
+
+  #createEmailUser({ email, householdId = null }) {
+    const result = this.db.prepare('INSERT INTO users (username, password_hash, household_id) VALUES (?, ?, ?)')
+      .run(email, 'email-code-login', householdId);
+    const id = Number(result.lastInsertRowid);
+    if (householdId == null) this.db.prepare('UPDATE users SET household_id = ? WHERE id = ?').run(id, id);
+    return { id, username: email, householdId: householdId || id };
+  }
+
+  #createEmailUserWithInvite({ email, inviteCode }) {
+    validateInviteCode(inviteCode);
+    const invite = this.db.prepare(`
+      SELECT invites.code, invites.used_by, users.household_id AS householdId
+      FROM invites
+      JOIN users ON users.id = invites.created_by
+      WHERE invites.code = ?
+    `).get(inviteCode.trim());
+    if (!invite || invite.used_by) throw new Error('invalid invite code');
+
+    const user = this.#createEmailUser({ email, householdId: invite.householdId });
+    this.db.prepare('UPDATE invites SET used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?').run(user.id, invite.code);
+    return user;
+  }
+
   login({ username, password }) {
     validateUsername(username);
     validatePassword(password);
@@ -100,6 +182,10 @@ export class AuthService {
     const user = this.db.prepare('SELECT id, username, password_hash, household_id AS householdId FROM users WHERE username = ?').get(username.trim());
     if (!user || !verifyPassword(password, user.password_hash)) throw new Error('invalid username or password');
 
+    return this.#createSession(user);
+  }
+
+  #createSession(user) {
     const token = randomBytes(32).toString('base64url');
     const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
     this.db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, user.id, expiresAt);
@@ -212,6 +298,16 @@ function validateUsername(username) {
 
 function validatePassword(password) {
   if (String(password || '').length < 8) throw new Error('password must be at least 8 characters');
+}
+
+function normalizeEmail(email) {
+  const normalized = String(email || '').trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized)) throw new Error('valid email is required');
+  return normalized;
+}
+
+function validateLoginCode(code) {
+  if (!/^\d{6}$/.test(String(code || '').trim())) throw new Error('code must be 6 digits');
 }
 
 function validateInviteCode(inviteCode) {
