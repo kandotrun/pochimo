@@ -549,12 +549,14 @@ function startDailyReportScheduler() {
     const shouldRun = Number(hour) > 22 || (hour === '22' && Number(minute) >= 0);
     if (!shouldRun || lastRunDate === date) return;
     running = true;
+    console.log(`[daily-report] start ${date}`);
     const ok = await createReportsForAllUsers(date).then(() => true).catch(err => {
       console.warn(`daily report failed: ${err.message}`);
       return false;
     }).finally(() => {
       running = false;
     });
+    console.log(`[daily-report] ${ok ? 'finished' : 'failed'} ${date}`);
     if (ok) lastRunDate = date;
   };
 
@@ -571,6 +573,7 @@ async function createReportsForAllUsers(date) {
 
     const profile = authService.getPetProfile(user.id, householdId);
     if (!profile?.name?.trim()) continue;
+    console.log(`[daily-report] creating household=${householdId}`);
     const result = await reportService.createReport(date, {
       useAi: true,
       userId: user.id,
@@ -580,6 +583,7 @@ async function createReportsForAllUsers(date) {
     reportedHouseholds.add(householdId);
     await sendDailyReportMail({ date, user, householdId, petName: profile.name, ...result });
     await markDailyReportMailSent(date, householdId);
+    console.log(`[daily-report] sent household=${householdId}`);
   }
 }
 
