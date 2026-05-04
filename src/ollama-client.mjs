@@ -188,7 +188,7 @@ ${JSON.stringify(compactEvents)}`;
 
       const raw = data.choices?.[0]?.message?.content || '';
       const parsed = extractJson(raw);
-      const items = normalizeTimelineItems(parsed.items, events);
+      const items = bucketTimelineItems(normalizeTimelineItems(parsed.items, events), petName);
       return { enabled: true, model: this.cloudReportModel, items: items.length ? items : fallback, raw: String(raw).trim() };
     } catch (err) {
       return { enabled: false, model: this.cloudReportModel, items: fallback, summary: `LLMタイムライン生成に失敗: ${err.message}` };
@@ -378,7 +378,54 @@ function createFallbackTimeline(events, petName = 'ペット') {
     });
   }
 
-  return groups.map(({ events: _events, ...item }) => item);
+  return bucketTimelineItems(groups.map(({ events: _events, ...item }) => item), petName);
+}
+
+function bucketTimelineItems(items, petName = 'ペット') {
+  const buckets = new Map();
+  for (const item of items) {
+    const key = tenMinuteBucketKey(item.startTime || item.time);
+    const bucket = buckets.get(key) || [];
+    bucket.push(item);
+    buckets.set(key, bucket);
+  }
+
+  return [...buckets.entries()].map(([key, bucketItems]) => summarizeTimelineBucket(key, bucketItems, petName));
+}
+
+function summarizeTimelineBucket(key, items, petName) {
+  if (items.length === 1) return items[0];
+  const sorted = [...items].sort((a, b) => String(a.startTime || a.time).localeCompare(String(b.startTime || b.time)));
+  const important = sorted.find(item => item.notify || item.category === 'mischief' || item.activityCategory === 'mischief');
+  const latest = sorted.at(-1);
+  const places = [...new Set(sorted.map(item => placeFromScene(`${item.detail || ''} ${item.title || item.timelineText || ''}`)).filter(Boolean))].slice(0, 2);
+  const labels = [...new Set(sorted.map(item => item.label || item.activityLabel || categoryToLabel(item.category || item.activityCategory)).filter(label => label && label !== '記録'))].slice(0, 2);
+
+  const title = important
+    ? String(important.title || important.timelineText || `${petName}の気になる動きがありました。`).replace(/^[^:：]+[:：]\s*/, '')
+    : places.length
+      ? `${petName}は${places.join('や')}でしばらく過ごしていました。`
+      : `${petName}はしばらく過ごしていました。`;
+
+  return {
+    ...latest,
+    startTime: sorted[0].startTime || sorted[0].time || key,
+    endTime: latest.endTime || latest.time || latest.startTime || key,
+    category: important ? (important.category || important.activityCategory || 'mischief') : (latest.category || latest.activityCategory || 'rest'),
+    label: important ? (important.label || important.activityLabel || '気になる動き') : (labels[0] || '今日の様子'),
+    title,
+    detail: places.length ? `${places.join('、')}での様子です。` : String(latest.detail || '').replace(/^[^:：]+[:：]\s*/, ''),
+    importance: important ? 'high' : 'normal',
+    notify: Boolean(important?.notify)
+  };
+}
+
+function tenMinuteBucketKey(time) {
+  const value = String(time || '');
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})/);
+  if (!match) return value;
+  const minute = String(Math.floor(Number(match[3]) / 10) * 10).padStart(2, '0');
+  return `${match[1]}T${match[2]}-${minute}-00`;
 }
 
 function shouldMergeFallbackTimelineEvents(previous, event, category) {

@@ -268,8 +268,8 @@ function renderTimeline(events, options = {}) {
   }
 
   const shown = options.edited
-    ? events.slice(-80).reverse()
-    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-80).reverse();
+    ? bucketTimelineItems(events).slice(-80).reverse()
+    : bucketTimelineItems(groupTimelineEvents(events.filter(shouldShowTimelineEvent))).slice(-80).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -342,6 +342,56 @@ function groupTimelineEvents(events) {
   }
 
   return groups;
+}
+
+function bucketTimelineItems(items) {
+  const buckets = new Map();
+  for (const item of items) {
+    const key = tenMinuteBucketKey(item.startTime || item.time);
+    const bucket = buckets.get(key) || [];
+    bucket.push(item);
+    buckets.set(key, bucket);
+  }
+  return [...buckets.entries()].map(([key, bucketItems]) => summarizeTimelineBucket(key, bucketItems));
+}
+
+function summarizeTimelineBucket(key, items) {
+  if (items.length === 1) return items[0];
+  const sorted = [...items].sort((a, b) => String(a.startTime || a.time).localeCompare(String(b.startTime || b.time)));
+  const important = sorted.find(item => item.notify || item.activityCategory === 'mischief' || item.category === 'mischief');
+  const latest = sorted.at(-1);
+  const places = [...new Set(sorted.map(item => placeFromTimelineText(`${item.detail || ''} ${item.ai?.scene || ''} ${item.title || item.timelineText || ''}`)).filter(Boolean))].slice(0, 2);
+  const labels = [...new Set(sorted.map(item => item.activityLabel || item.label || categoryLabel(item.activityCategory || item.category)).filter(label => label && label !== '記録'))].slice(0, 2);
+  const petName = petProfile.name?.trim() || 'ペット';
+
+  const title = important
+    ? cleanTimelineText(important.title || important.timelineText || `${petName}の気になる動きがありました。`).replace(/^[^:：]+[:：]\s*/, '')
+    : places.length
+      ? `${petName}は${places.join('や')}でしばらく過ごしていました。`
+      : `${petName}はしばらく過ごしていました。`;
+
+  return {
+    ...latest,
+    startTime: sorted[0].startTime || sorted[0].time || key,
+    endTime: latest.endTime || latest.time || latest.startTime || key,
+    activityCategory: important ? (important.activityCategory || important.category || 'mischief') : (latest.activityCategory || latest.category || 'rest'),
+    activityLabel: important ? (important.activityLabel || important.label || '気になる動き') : (labels[0] || '今日の様子'),
+    timelineText: title,
+    detail: places.length ? `${places.join('、')}での様子です。` : cleanTimelineText(latest.detail || latest.ai?.scene || ''),
+    motionScore: Math.max(...sorted.map(item => Number(item.motionScore || 0))),
+    notify: Boolean(important?.notify),
+    file: latest.file,
+    imageUrl: latest.imageUrl,
+    imageTime: latest.imageTime || latest.time
+  };
+}
+
+function tenMinuteBucketKey(time) {
+  const value = String(time || '');
+  const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})/);
+  if (!match) return value;
+  const minute = String(Math.floor(Number(match[3]) / 10) * 10).padStart(2, '0');
+  return `${match[1]}T${match[2]}-${minute}-00`;
 }
 
 function shouldMergeTimelineEvents(group, event) {
