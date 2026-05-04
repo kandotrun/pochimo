@@ -220,6 +220,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 
 .latest-preview {
+  position: relative;
   display: grid;
   place-items: center;
   width: 100%;
@@ -230,11 +231,41 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   border-radius: calc(var(--radius) - 2px);
 }
 .latest-preview img {
+  grid-area: 1 / 1;
   display: block;
   width: 100%;
   height: auto;
   max-height: 58vh;
   object-fit: contain;
+}
+.latest-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+}
+.latest-overlay[hidden] { display: none; }
+.pet-box {
+  position: absolute;
+  min-width: 44px;
+  min-height: 44px;
+  border: 2px solid var(--primary);
+  border-radius: 12px;
+  box-shadow: 0 0 0 1px rgba(255,255,255,.88), 0 8px 24px rgba(0,0,0,.18);
+}
+.pet-box span {
+  position: absolute;
+  left: -2px;
+  top: -34px;
+  max-width: 180px;
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 6px 18px rgba(0,0,0,.16);
 }
 .latest-empty { padding: 36px 16px; color: var(--muted-foreground); text-align: center; }
 .skeleton {

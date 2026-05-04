@@ -9,6 +9,7 @@ const petAvatar = document.getElementById('petAvatar');
 const reportEl = document.getElementById('report');
 const timelineEl = document.getElementById('timeline');
 const latestImage = document.getElementById('latestImage');
+const latestOverlay = document.getElementById('latestOverlay');
 const latestEmpty = document.getElementById('latestEmpty');
 const latestMeta = document.getElementById('latestMeta');
 
@@ -25,6 +26,8 @@ async function refreshAll() {
 
 function renderSkeletons() {
   latestImage.hidden = true;
+  latestOverlay.hidden = true;
+  latestOverlay.innerHTML = '';
   latestEmpty.hidden = false;
   latestEmpty.innerHTML = '<div class="skeleton skeleton-latest"></div>';
   latestMeta.innerHTML = '<div class="skeleton skeleton-line short"></div>';
@@ -52,6 +55,8 @@ async function refreshLatest() {
   const json = await fetch(`/api/latest?date=${encodeURIComponent(selectedDate)}`).then(res => res.json());
   if (!json.imageUrl || !json.event) {
     latestImage.hidden = true;
+    latestOverlay.hidden = true;
+    latestOverlay.innerHTML = '';
     latestEmpty.hidden = false;
     latestMeta.textContent = `${formatDateLabel(selectedDate)}の写真はまだありません。`;
     return;
@@ -61,6 +66,44 @@ async function refreshLatest() {
   latestImage.hidden = false;
   latestEmpty.hidden = true;
   latestMeta.textContent = `${formatEventTime(json.event.time)} に撮影`;
+  renderLatestDetection(json.event);
+}
+
+function renderLatestDetection(event) {
+  const box = normalizePetBox(event?.ai?.petBox || event?.petBox);
+  if (!box || event?.ai?.petVisible !== true) {
+    latestOverlay.hidden = true;
+    latestOverlay.innerHTML = '';
+    return;
+  }
+
+  const label = petProfile.name?.trim() ? `${petProfile.name.trim()}はここ` : 'ここにいます';
+  latestOverlay.hidden = false;
+  latestOverlay.innerHTML = `
+    <div class="pet-box" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.width * 100}%;height:${box.height * 100}%">
+      <span>${escapeHtml(label)}</span>
+    </div>`;
+}
+
+function normalizePetBox(box) {
+  if (!box || typeof box !== 'object') return null;
+  const x = clamp01(Number(box.x));
+  const y = clamp01(Number(box.y));
+  const width = clamp01(Number(box.width));
+  const height = clamp01(Number(box.height));
+
+  if (![x, y, width, height].every(Number.isFinite) || width <= 0.02 || height <= 0.02) return null;
+  return {
+    x: Math.min(x, 0.98),
+    y: Math.min(y, 0.98),
+    width: Math.min(width, 1 - x),
+    height: Math.min(height, 1 - y)
+  };
+}
+
+function clamp01(value) {
+  if (!Number.isFinite(value)) return NaN;
+  return Math.max(0, Math.min(1, value));
 }
 
 async function loadPetProfile() {
