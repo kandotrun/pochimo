@@ -33,6 +33,11 @@ export class AuthService {
         updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY(user_id) REFERENCES users(id) ON DELETE CASCADE
       );
+      CREATE TABLE IF NOT EXISTS household_settings (
+        household_id INTEGER PRIMARY KEY,
+        mischief_email_enabled INTEGER NOT NULL DEFAULT 1,
+        updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+      );
       CREATE TABLE IF NOT EXISTS invites (
         code TEXT PRIMARY KEY,
         created_by INTEGER NOT NULL,
@@ -277,6 +282,37 @@ export class AuthService {
     }
 
     return this.getPetProfile(userId, householdId);
+  }
+
+  getHouseholdSettings(householdId) {
+    const row = this.db.prepare(`
+      SELECT household_id AS householdId, mischief_email_enabled AS mischiefEmailEnabled, updated_at AS updatedAt
+      FROM household_settings
+      WHERE household_id = ?
+    `).get(Number(householdId));
+
+    return {
+      householdId: Number(householdId),
+      mischiefEmailEnabled: row ? Boolean(row.mischiefEmailEnabled) : true,
+      updatedAt: row?.updatedAt || null
+    };
+  }
+
+  saveHouseholdSettings(householdId, patch = {}) {
+    const current = this.getHouseholdSettings(householdId);
+    const mischiefEmailEnabled = patch.mischiefEmailEnabled == null
+      ? current.mischiefEmailEnabled
+      : Boolean(patch.mischiefEmailEnabled);
+
+    this.db.prepare(`
+      INSERT INTO household_settings (household_id, mischief_email_enabled, updated_at)
+      VALUES (?, ?, CURRENT_TIMESTAMP)
+      ON CONFLICT(household_id) DO UPDATE SET
+        mischief_email_enabled = excluded.mischief_email_enabled,
+        updated_at = CURRENT_TIMESTAMP
+    `).run(Number(householdId), mischiefEmailEnabled ? 1 : 0);
+
+    return this.getHouseholdSettings(householdId);
   }
 }
 

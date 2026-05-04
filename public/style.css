@@ -186,6 +186,22 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .pet-avatar.has-photo { font-size: 0; }
 .profile-form { display: flex; gap: 12px; align-items: end; flex-wrap: wrap; }
 .profile-form .field { min-width: 220px; }
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 4px 4px;
+}
+.toggle-row span { display: grid; gap: 4px; }
+.toggle-row strong { font-size: 15px; }
+.toggle-row small { color: var(--muted-foreground); line-height: 1.5; }
+.toggle-row input {
+  width: 22px;
+  height: 22px;
+  accent-color: var(--primary);
+  flex: 0 0 auto;
+}
 .upload-button {
   display: inline-flex;
   align-items: center;

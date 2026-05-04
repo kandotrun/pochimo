@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>設定</title>
-  <link rel="stylesheet" href="/style.css?v=20260504-24" />
+  <link rel="stylesheet" href="/style.css?v=20260504-30" />
 </head>
 <body>
   <main class="app-shell with-tabs">
@@ -41,6 +41,23 @@
         </label>
       </div>
       <p id="profileStatus" class="status">未保存の変更は自動保存されます。</p>
+    </section>
+
+    <section class="card notification-card">
+      <div class="section-head">
+        <div>
+          <h2>メール通知</h2>
+          <p class="section-description">必要なときだけメールで知らせます。</p>
+        </div>
+      </div>
+      <label class="toggle-row">
+        <span>
+          <strong>イタズラかもしれない時にメールする</strong>
+          <small>オフにすると、日報には残してメールだけ止めます。</small>
+        </span>
+        <input id="mischiefEmailToggle" type="checkbox" checked />
+      </label>
+      <p id="notificationStatus" class="status">読み込み中...</p>
     </section>
 
     <section class="card invite-card">
@@ -86,6 +103,6 @@
       </div>
     </div>
   </div>
-  <script src="/settings.js?v=20260504-2"></script>
+  <script src="/settings.js?v=20260504-3"></script>
 </body>
 </html>

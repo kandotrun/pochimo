@@ -126,6 +126,15 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, profile: authService.getPetProfile(user.id, user.householdId) });
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/settings') {
+      return sendJson(res, 200, { ok: true, settings: authService.getHouseholdSettings(user.householdId || user.id) });
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/settings') {
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
+      return sendJson(res, 200, { ok: true, settings: authService.saveHouseholdSettings(user.householdId || user.id, body) });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/invites') {
       return sendJson(res, 200, { ok: true, invites: authService.listInvites(user.id) });
     }
@@ -340,6 +349,14 @@ function buildTimelineSignature(events) {
 
 async function notifyImportantEventByEmail(event, petName = 'ペット') {
   if (!shouldSendEventMail(event)) return;
+  const settings = authService.getHouseholdSettings(event.householdId || event.userId);
+  if (event.activityCategory === 'mischief' && !settings.mischiefEmailEnabled) {
+    await frameService.updateEvent(event.time.slice(0, 10), event.time, {
+      notificationStatus: 'skipped',
+      notificationSkippedReason: 'mischief_email_disabled'
+    });
+    return;
+  }
 
   const recipients = authService
     .listHouseholdUsers(event.householdId || event.userId)

@@ -14,8 +14,11 @@ const cropSave = document.getElementById('cropSave');
 const createInviteBtn = document.getElementById('createInviteBtn');
 const inviteResult = document.getElementById('inviteResult');
 const inviteList = document.getElementById('inviteList');
+const mischiefEmailToggle = document.getElementById('mischiefEmailToggle');
+const notificationStatus = document.getElementById('notificationStatus');
 
 let petProfile = {};
+let householdSettings = { mischiefEmailEnabled: true };
 let profileSaveTimer = null;
 let cropSource = null;
 
@@ -25,6 +28,7 @@ function renderSettingsSkeleton() {
   petAvatar.classList.add('skeleton');
   petNameInput.placeholder = '読み込み中...';
   profileStatus.innerHTML = '<div class="skeleton skeleton-line short"></div>';
+  notificationStatus.innerHTML = '<div class="skeleton skeleton-line short"></div>';
   inviteList.innerHTML = '<div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line short"></div>';
 }
 
@@ -52,6 +56,19 @@ function renderPetProfile() {
   }
 }
 
+async function loadHouseholdSettings() {
+  const json = await fetch('/api/settings').then(res => res.json());
+  householdSettings = json.settings || { mischiefEmailEnabled: true };
+  renderHouseholdSettings();
+}
+
+function renderHouseholdSettings() {
+  mischiefEmailToggle.checked = householdSettings.mischiefEmailEnabled !== false;
+  notificationStatus.textContent = mischiefEmailToggle.checked
+    ? 'イタズラかもしれない時はメールします。'
+    : 'イタズラかもしれない時もメールしません。日報には残ります。';
+}
+
 function savePetProfile(patch) {
   petProfile = { ...petProfile, ...patch };
   renderPetProfile();
@@ -76,6 +93,29 @@ function savePetProfile(patch) {
 }
 
 petNameInput.addEventListener('input', event => savePetProfile({ name: event.target.value }));
+mischiefEmailToggle.addEventListener('change', async event => {
+  mischiefEmailToggle.disabled = true;
+  householdSettings = { ...householdSettings, mischiefEmailEnabled: event.target.checked };
+  renderHouseholdSettings();
+  notificationStatus.textContent = '保存中...';
+  try {
+    const res = await fetch('/api/settings', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ mischiefEmailEnabled: householdSettings.mischiefEmailEnabled })
+    });
+    const json = await res.json();
+    if (!json.ok) throw new Error(json.error || 'failed');
+    householdSettings = json.settings;
+    renderHouseholdSettings();
+  } catch (err) {
+    householdSettings.mischiefEmailEnabled = !event.target.checked;
+    renderHouseholdSettings();
+    notificationStatus.textContent = `保存できませんでした: ${err.message}`;
+  } finally {
+    mischiefEmailToggle.disabled = false;
+  }
+});
 petPhotoInput.addEventListener('change', event => {
   const file = event.target.files?.[0];
   if (!file) return;
@@ -190,5 +230,8 @@ function escapeHtml(value) {
 renderSettingsSkeleton();
 loadPetProfile().catch(err => {
   profileStatus.textContent = `読み込みに失敗しました: ${err.message}`;
+});
+loadHouseholdSettings().catch(err => {
+  notificationStatus.textContent = `読み込みに失敗しました: ${err.message}`;
 });
 loadInvites().catch(() => {});
