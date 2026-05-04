@@ -127,7 +127,7 @@ h2 { font-size: 22px; font-weight: 700; }
   background: var(--muted);
   border: 1px solid var(--border);
 }
-video { display: block; width: 100%; max-height: 56vh; min-height: 280px; object-fit: cover; background: var(--muted); }
+video { display: block; width: 100%; max-height: 56vh; min-height: 280px; object-fit: contain; background: var(--muted); }
 .camera-overlay { position: absolute; inset: 12px 12px auto; display: flex; justify-content: space-between; pointer-events: none; }
 .record-badge { background: rgba(255,255,255,.92); color: var(--foreground); }
 .record-badge.recording { color: #991b1b; border-color: #fecaca; background: #fef2f2; }

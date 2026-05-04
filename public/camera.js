@@ -38,8 +38,25 @@ async function startCamera() {
     },
     audio: false
   });
+  await preferMaximumCameraResolution(stream);
   video.srcObject = stream;
   await video.play();
+}
+
+async function preferMaximumCameraResolution(stream) {
+  const [track] = stream.getVideoTracks();
+  if (!track?.getCapabilities || !track.applyConstraints) return;
+
+  const capabilities = track.getCapabilities();
+  const width = capabilities.width?.max;
+  const height = capabilities.height?.max;
+  if (!width || !height) return;
+
+  await track.applyConstraints({
+    width: { ideal: width },
+    height: { ideal: height },
+    resizeMode: 'none'
+  }).catch(() => {});
 }
 
 function captureFrame() {
