@@ -351,6 +351,14 @@ function buildTimelineSignature(events) {
 
 async function notifyImportantEventByEmail(event, petName = 'ペット') {
   if (!shouldSendEventMail(event)) return;
+  const cooldown = await checkEventMailCooldown(event);
+  if (!cooldown.allowed) {
+    await frameService.updateEvent(event.time.slice(0, 10), event.time, {
+      notificationStatus: 'skipped',
+      notificationSkippedReason: cooldown.reason
+    });
+    return;
+  }
   const settings = authService.getHouseholdSettings(event.householdId || event.userId);
   if (event.activityCategory === 'mischief' && !settings.mischiefEmailEnabled) {
     await frameService.updateEvent(event.time.slice(0, 10), event.time, {
@@ -397,6 +405,32 @@ async function notifyImportantEventByEmail(event, petName = 'ペット') {
     notificationSentAt: new Date().toISOString(),
     notificationRecipients: recipients
   });
+  if (!result.skipped) await markEventMailSent(event);
+}
+
+async function checkEventMailCooldown(event) {
+  const state = await readJson(eventMailStatePath(), {});
+  const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+  const key = `${event.householdId || event.userId}:${category}`;
+  const lastSentAt = Date.parse(state[key]?.sentAt || '');
+  const cooldownMs = category === 'mischief' ? 30 * 60 * 1000 : 60 * 60 * 1000;
+  if (Number.isFinite(lastSentAt) && Date.now() - lastSentAt < cooldownMs) {
+    return { allowed: false, reason: `${category}_email_cooldown` };
+  }
+  return { allowed: true };
+}
+
+async function markEventMailSent(event) {
+  const file = eventMailStatePath();
+  const state = await readJson(file, {});
+  const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+  const key = `${event.householdId || event.userId}:${category}`;
+  state[key] = { sentAt: new Date().toISOString(), eventTime: event.time };
+  await writeJson(file, state);
+}
+
+function eventMailStatePath() {
+  return path.join(paths.reportsDir, 'event-mail-state.json');
 }
 
 function shouldSendEventMail(event) {
