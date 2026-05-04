@@ -512,4 +512,3 @@ async function refreshReport() {
 updateDateControls();
 loadPetProfile().catch(() => renderPetProfile());
 refreshAll().catch(() => {});
-setInterval(refreshAll, 15000);
