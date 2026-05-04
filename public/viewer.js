@@ -287,9 +287,6 @@ function renderTimeline(events, options = {}) {
       || (observation?.petVisible === true
         ? `${shouldShowCategoryBadge(category) ? `${category}: ` : ''}${observation.petActivity || '写っています'}`
         : observation?.scene || (event.aiStatus === 'analyzing' ? '内容を確認中...' : '様子を確認しています'));
-    const pet = observation
-      ? observation.petVisible === true ? 'ペットが見えます' : observation.petVisible === false ? 'ペットは見えません' : '確認中'
-      : event.aiStatus === 'analyzing' ? '確認中' : '';
     const detail = cleanTimelineText(event.detail || observation?.scene || '');
     const imageSrc = event.imageUrl || (event.file ? `/${event.file}` : '');
     const imageVersion = event.imageTime || event.time || event.endTime || event.startTime || '';
@@ -305,7 +302,7 @@ function renderTimeline(events, options = {}) {
         <div class="timeline-body">
           ${imageSrc ? `<img class="timeline-photo" src="${escapeHtml(imageSrc)}?v=${encodeURIComponent(imageVersion)}" alt="${escapeHtml(formatTimelineTime(event))}の写真" loading="lazy" />` : ''}
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
-          <p class="timeline-meta">${escapeHtml([pet, detail, event.notify ? '通知対象' : ''].filter(Boolean).join(' ・ '))}</p>
+          ${detail ? `<p class="timeline-meta">${escapeHtml(detail)}</p>` : ''}
         </div>
       </article>`;
   }).join('');
@@ -412,7 +409,7 @@ function parseEventTime(time) {
 }
 
 function shouldShowCategoryBadge(category) {
-  return Boolean(category) && !['ペット', '見えない', '不明', '確認中'].includes(category);
+  return Boolean(category) && !['ペット', '見えない', '不明', '確認中', '記録'].includes(category);
 }
 
 function categoryLabel(category, observation) {
