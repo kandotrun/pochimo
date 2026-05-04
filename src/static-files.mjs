@@ -21,9 +21,9 @@ export async function serveStatic({ publicDir, pathname, res }) {
     ['/lp', '/lp.html']
   ]);
   const requested = routeMap.get(pathname) || pathname;
-  const filePath = path.normalize(path.join(publicDir, requested));
+  const filePath = safeJoin(publicDir, requested);
 
-  if (!filePath.startsWith(publicDir)) {
+  if (!filePath) {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Forbidden');
     return;
@@ -42,4 +42,13 @@ export async function serveStatic({ publicDir, pathname, res }) {
     }
     throw err;
   }
+}
+
+function safeJoin(rootDir, requestedPath) {
+  const root = path.resolve(rootDir);
+  const relativePath = String(requestedPath || '').replace(/^\/+/, '');
+  const filePath = path.resolve(root, relativePath);
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return filePath;
 }

@@ -20,6 +20,7 @@ const authService = new AuthService({ dataDir: config.dataDir });
 const abService = new AbService({ dataDir: config.dataDir });
 const aiClient = new OllamaClient(config.ollama);
 const timelineCache = new Map();
+const rateLimits = new Map();
 const frameService = new FrameService({ dataDir: config.dataDir, framesDir: paths.framesDir });
 const reportService = new ReportService({
   rootDir: config.rootDir,
@@ -35,6 +36,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'OPTIONS') return sendJson(res, 204, {});
 
     const url = new URL(req.url, `http://${req.headers.host}`);
+    verifyRequestOrigin(req);
 
     const user = authService.getUserByToken(parseCookies(req).pet_session);
 
@@ -87,13 +89,22 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/start') {
       const body = JSON.parse(await parseBody(req));
+      const ip = getClientIp(req);
+      const emailKey = String(body.email || '').trim().toLowerCase();
+      enforceRateLimit(`email-start:ip:${ip}`, 30, 15 * 60 * 1000);
+      enforceRateLimit(`email-start:email:${emailKey}`, 5, 15 * 60 * 1000);
       const loginCode = authService.createEmailLoginCode(body);
-      await sendLoginCodeMail(loginCode);
+      if (!loginCode.skipped) await sendLoginCodeMail(loginCode);
       return sendJson(res, 200, { ok: true, email: loginCode.email, expiresAt: loginCode.expiresAt });
     }
 
     if (req.method === 'POST' && url.pathname === '/api/auth/email/verify') {
-      const session = authService.verifyEmailLoginCode(JSON.parse(await parseBody(req)));
+      const body = JSON.parse(await parseBody(req));
+      const ip = getClientIp(req);
+      const emailKey = String(body.email || '').trim().toLowerCase();
+      enforceRateLimit(`email-verify:ip:${ip}`, 60, 15 * 60 * 1000);
+      enforceRateLimit(`email-verify:email:${emailKey}`, 10, 15 * 60 * 1000);
+      const session = authService.verifyEmailLoginCode(body);
       res.setHeader('Set-Cookie', sessionCookie(session.token, session.expiresAt));
       return sendJson(res, 200, { ok: true, user: session.user });
     }
@@ -136,6 +147,7 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && url.pathname === '/api/capture') {
+      enforceRateLimit(`capture:user:${user.id}`, 240, 15 * 60 * 1000);
       const body = JSON.parse(await parseBody(req));
       const result = await frameService.saveCapture(body, user.id, user.householdId);
       analyzeEventInBackground(result.event, body.image, petProfile.name);
@@ -174,7 +186,12 @@ const server = http.createServer(async (req, res) => {
 
     return serveStatic({ publicDir: config.publicDir, pathname: url.pathname, res });
   } catch (err) {
-    return sendJson(res, 500, { ok: false, error: err.message });
+    const status = err.message === 'too many requests'
+      ? 429
+      : err.message === 'invalid request origin'
+        ? 403
+        : 500;
+    return sendJson(res, status, { ok: false, error: err.message });
   }
 });
 
@@ -388,9 +405,9 @@ async function sendLoginCodeMail({ email, code }) {
 
 async function serveFrame(pathname, res, userId, householdId) {
   const relative = pathname.replace(/^\/data\/frames\//, '');
-  const filePath = path.normalize(path.join(paths.framesDir, relative));
+  const filePath = safeJoin(paths.framesDir, relative);
 
-  if (!filePath.startsWith(paths.framesDir) || !filePath.endsWith('.jpg')) {
+  if (!filePath || !filePath.endsWith('.jpg')) {
     res.writeHead(403, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Forbidden');
     return;
@@ -419,6 +436,39 @@ async function serveFrame(pathname, res, userId, householdId) {
     }
     throw err;
   }
+}
+
+function safeJoin(rootDir, requestedPath) {
+  const root = path.resolve(rootDir);
+  const filePath = path.resolve(root, String(requestedPath || '').replace(/^\/+/, ''));
+  const relative = path.relative(root, filePath);
+  if (relative.startsWith('..') || path.isAbsolute(relative)) return null;
+  return filePath;
+}
+
+function getClientIp(req) {
+  return String(req.headers['cf-connecting-ip'] || req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown')
+    .split(',')[0]
+    .trim();
+}
+
+function verifyRequestOrigin(req) {
+  if (!['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)) return;
+  const origin = req.headers.origin;
+  if (!origin) return;
+  const allowed = new Set([config.appOrigin, config.marketingOrigin].map(value => String(value || '').replace(/\/$/, '')));
+  if (!allowed.has(String(origin).replace(/\/$/, ''))) throw new Error('invalid request origin');
+}
+
+function enforceRateLimit(key, maxRequests, windowMs) {
+  const now = Date.now();
+  for (const [entryKey, entry] of rateLimits) {
+    if (entry.resetAt <= now) rateLimits.delete(entryKey);
+  }
+  const current = rateLimits.get(key) || { count: 0, resetAt: now + windowMs };
+  current.count += 1;
+  rateLimits.set(key, current);
+  if (current.count > maxRequests) throw new Error('too many requests');
 }
 
 function isProfileSetupPath(pathname) {

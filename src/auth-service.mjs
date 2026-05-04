@@ -113,9 +113,9 @@ export class AuthService {
 
     const user = this.db.prepare('SELECT id FROM users WHERE username = ?').get(normalizedEmail);
     if (!user && this.hasUsers()) {
-      if (!normalizedInvite) throw new Error('account not found');
+      if (!normalizedInvite) return genericSkippedLoginCode(normalizedEmail);
       const invite = this.db.prepare('SELECT code, used_by FROM invites WHERE code = ?').get(normalizedInvite);
-      if (!invite || invite.used_by) throw new Error('invalid invite code');
+      if (!invite || invite.used_by) return genericSkippedLoginCode(normalizedEmail);
     }
 
     const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
@@ -291,11 +291,11 @@ export function parseCookies(req) {
 
 export function sessionCookie(token, expiresAt) {
   const maxAge = Math.max(0, Math.floor((expiresAt - Date.now()) / 1000));
-  return `pet_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}`;
+  return `pet_session=${encodeURIComponent(token)}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=${maxAge}`;
 }
 
 export function clearSessionCookie() {
-  return 'pet_session=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0';
+  return 'pet_session=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0';
 }
 
 function hashPassword(password) {
@@ -333,4 +333,13 @@ function validateLoginCode(code) {
 
 function validateInviteCode(inviteCode) {
   if (!String(inviteCode || '').trim()) throw new Error('invite code is required');
+}
+
+function genericSkippedLoginCode(email) {
+  return {
+    email,
+    code: '',
+    expiresAt: Date.now() + 10 * 60 * 1000,
+    skipped: true
+  };
 }

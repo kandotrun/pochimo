@@ -1,7 +1,8 @@
 export function sendJson(res, status, body) {
   res.writeHead(status, {
     'content-type': 'application/json; charset=utf-8',
-    'access-control-allow-origin': '*'
+    'x-content-type-options': 'nosniff',
+    'cache-control': 'no-store'
   });
   res.end(JSON.stringify(body));
 }
