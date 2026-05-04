@@ -32,9 +32,9 @@ const reportService = new ReportService({
   aiClient,
 });
 
-startDailyReportScheduler();
+if (process.env.NODE_ENV !== "test") startDailyReportScheduler();
 
-const app = new Hono<AppBindings>();
+export const app = new Hono<AppBindings>();
 
 app.onError((err, c) => {
   const status =
@@ -924,5 +924,9 @@ function categoryLabel(category: string) {
   );
 }
 
-serve({ fetch: app.fetch, port: config.port, hostname: "0.0.0.0" });
-console.log(`Pet Diary AI MVP running: http://localhost:${config.port}`);
+export function startServer() {
+  serve({ fetch: app.fetch, port: config.port, hostname: "0.0.0.0" });
+  console.log(`Pet Diary AI MVP running: http://localhost:${config.port}`);
+}
+
+if (process.env.NODE_ENV !== "test") startServer();

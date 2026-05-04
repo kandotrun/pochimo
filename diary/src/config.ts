@@ -12,8 +12,8 @@ export const config = {
   marketingOrigin: process.env.PUBLIC_MARKETING_ORIGIN || "https://pochimo.com",
   appOrigin: process.env.PUBLIC_APP_ORIGIN || "https://diary.pochimo.com",
   setupToken: process.env.SETUP_TOKEN || "",
-  dataDir: path.join(rootDir, "data"),
-  publicDir: path.join(rootDir, "public"),
+  dataDir: process.env.DATA_DIR || path.join(rootDir, "data"),
+  publicDir: process.env.PUBLIC_DIR || path.join(rootDir, "public"),
   mail: {
     resendApiKey: process.env.RESEND_API_KEY || "",
     from: process.env.MAIL_FROM || "ぽちも日報 <noreply@send.pochimo.com>",
