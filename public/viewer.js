@@ -33,26 +33,34 @@ function renderSkeletons() {
   latestEmpty.hidden = false;
   latestEmpty.innerHTML = '<div class="skeleton skeleton-latest"></div>';
   latestMeta.innerHTML = '<div class="skeleton skeleton-line short"></div>';
-  timelineEl.className = 'timeline';
-  timelineEl.innerHTML = Array.from({ length: 4 }, () => `
-    <article class="skeleton-timeline-item">
-      <div class="skeleton skeleton-time"></div>
-      <span class="skeleton skeleton-dot"></span>
-      <div class="skeleton-card">
-        <div class="skeleton skeleton-line"></div>
-        <div class="skeleton skeleton-line short"></div>
-      </div>
-    </article>
-  `).join('');
+  renderTimelineGenerating();
 }
 
 async function refreshTimeline() {
+  renderTimelineGenerating();
   const [events, timeline] = await Promise.all([
     fetch(`/api/events?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()),
     fetch(`/api/timeline?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()).catch(() => null)
   ]);
   latestEvents = events;
   renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
+}
+
+function renderTimelineGenerating() {
+  timelineEl.className = 'timeline generating';
+  timelineEl.innerHTML = `
+    <div class="timeline-generating-card">
+      <div class="ai-orb" aria-hidden="true"></div>
+      <div>
+        <p class="generating-title">AIが今日の記録を編集中です</p>
+        <p class="generating-message">細かい検知ログを読み込んで、家族で見やすい日記にまとめています。</p>
+        <div class="generating-steps" aria-hidden="true">
+          <span>写真を確認中</span>
+          <span>同じ行動を整理中</span>
+          <span>日記として要約中</span>
+        </div>
+      </div>
+    </div>`;
 }
 
 async function refreshLatest() {
