@@ -158,7 +158,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/latest') {
       const date = url.searchParams.get('date') || todayJst();
       const events = await frameService.listEvents(date, user.id, user.householdId);
-      const latest = [...events].reverse().find(event => event.file);
+      const latest = pickLatestDisplayPhoto(events);
       return sendJson(res, 200, latest ? { ok: true, event: latest, imageUrl: `/${latest.file}` } : { ok: true, event: null, imageUrl: null });
     }
 
@@ -229,6 +229,17 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
       }).catch(() => {});
     }
   });
+}
+
+function pickLatestDisplayPhoto(events) {
+  const withFiles = [...events].reverse().filter(event => event.file);
+  if (!withFiles.length) return null;
+
+  // 「最新の写真」は、ただ最後に保存された暗い/不明写真ではなく、
+  // ペット位置を示せる直近写真を優先する。見つからなければ通常の最新写真に戻す。
+  return withFiles.find(event => event.ai?.petVisible === true && event.ai?.petBox)
+    || withFiles.find(event => event.ai?.petVisible === true)
+    || withFiles[0];
 }
 
 async function getCachedTimeline({ date, user, events, petName }) {

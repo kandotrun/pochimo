@@ -14,6 +14,12 @@ const latestEmpty = document.getElementById('latestEmpty');
 const latestMeta = document.getElementById('latestMeta');
 
 latestImage.addEventListener('load', () => applyAdaptivePhotoEnhancement(latestImage));
+latestImage.addEventListener('load', () => {
+  if (latestImage.dataset.pendingDetection) {
+    renderLatestDetection(JSON.parse(latestImage.dataset.pendingDetection));
+    delete latestImage.dataset.pendingDetection;
+  }
+});
 
 let latestEvents = [];
 let petProfile = {};
@@ -97,7 +103,11 @@ async function refreshLatest() {
   latestImage.hidden = false;
   latestEmpty.hidden = true;
   latestMeta.textContent = `${formatEventTime(json.event.time)} に撮影`;
-  renderLatestDetection(json.event);
+  if (latestImage.complete && latestImage.naturalWidth) {
+    renderLatestDetection(json.event);
+  } else {
+    latestImage.dataset.pendingDetection = JSON.stringify(json.event);
+  }
 }
 
 function applyAdaptivePhotoEnhancement(img) {
@@ -165,11 +175,30 @@ function renderLatestDetection(event) {
   }
 
   const label = petProfile.name?.trim() ? `${petProfile.name.trim()}はここ` : 'ここにいます';
+  const rect = getContainedImageRect(latestImage);
   latestOverlay.hidden = false;
   latestOverlay.innerHTML = `
-    <div class="pet-box" style="left:${box.x * 100}%;top:${box.y * 100}%;width:${box.width * 100}%;height:${box.height * 100}%">
+    <div class="pet-box" style="left:${rect.left + box.x * rect.width}%;top:${rect.top + box.y * rect.height}%;width:${box.width * rect.width}%;height:${box.height * rect.height}%">
       <span>${escapeHtml(label)}</span>
     </div>`;
+}
+
+function getContainedImageRect(img) {
+  const container = img.parentElement;
+  if (!container || !img.naturalWidth || !img.naturalHeight) {
+    return { left: 0, top: 0, width: 100, height: 100 };
+  }
+  const containerRatio = container.clientWidth / container.clientHeight;
+  const imageRatio = img.naturalWidth / img.naturalHeight;
+  if (!Number.isFinite(containerRatio) || !Number.isFinite(imageRatio)) {
+    return { left: 0, top: 0, width: 100, height: 100 };
+  }
+  if (imageRatio > containerRatio) {
+    const height = (containerRatio / imageRatio) * 100;
+    return { left: 0, top: (100 - height) / 2, width: 100, height };
+  }
+  const width = (imageRatio / containerRatio) * 100;
+  return { left: (100 - width) / 2, top: 0, width, height: 100 };
 }
 
 function normalizePetBox(box) {
