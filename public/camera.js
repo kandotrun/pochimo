@@ -30,7 +30,12 @@ function setRecording(active) {
 
 async function startCamera() {
   const stream = await navigator.mediaDevices.getUserMedia({
-    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } },
+    video: {
+      facingMode: { ideal: 'environment' },
+      width: { ideal: 4096 },
+      height: { ideal: 4096 },
+      resizeMode: 'none'
+    },
     audio: false
   });
   video.srcObject = stream;
@@ -63,7 +68,7 @@ function captureFrame() {
   }
   lastSample = new Uint8ClampedArray(data);
 
-  return { image: canvas.toDataURL('image/jpeg', 0.72), motionScore };
+  return { image: canvas.toDataURL('image/jpeg', 0.94), motionScore };
 }
 
 async function postFrame(payload) {
