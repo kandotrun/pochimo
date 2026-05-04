@@ -12,7 +12,21 @@ const inviteCodeInput = document.getElementById('inviteCode');
 let step = 'email';
 let currentEmail = '';
 
+function renderStep(nextStep) {
+  step = nextStep;
+  const isCodeStep = step === 'code';
+  codeField.hidden = !isCodeStep;
+  codeField.setAttribute('aria-hidden', String(!isCodeStep));
+  codeField.classList.toggle('is-visible', isCodeStep);
+  codeInput.required = isCodeStep;
+  if (!isCodeStep) codeInput.value = '';
+  emailInput.disabled = isCodeStep;
+  submitBtn.textContent = isCodeStep ? 'ログインする' : 'コードを送る';
+  backBtn.hidden = !isCodeStep;
+}
+
 async function init() {
+  renderStep('email');
   const state = await fetch('/api/auth/state').then(res => res.json());
   if (state.user) {
     location.href = '/viewer';
@@ -34,13 +48,7 @@ authForm.addEventListener('submit', async event => {
 });
 
 backBtn.addEventListener('click', () => {
-  step = 'email';
-  codeField.hidden = true;
-  codeInput.required = false;
-  codeInput.value = '';
-  emailInput.disabled = false;
-  submitBtn.textContent = 'コードを送る';
-  backBtn.hidden = true;
+  renderStep('email');
   authStatus.textContent = '';
   emailInput.focus();
 });
@@ -57,12 +65,7 @@ async function requestCode() {
     });
     if (!json.ok) throw new Error(json.error || 'failed');
 
-    step = 'code';
-    emailInput.disabled = true;
-    codeField.hidden = false;
-    codeInput.required = true;
-    submitBtn.textContent = 'ログインする';
-    backBtn.hidden = false;
+    renderStep('code');
     authStatus.textContent = `${json.email} に6桁コードを送りました。10分以内に入力してください。`;
     codeInput.focus();
   } catch (err) {

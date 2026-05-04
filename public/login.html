@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>ぽちも日報にログイン</title>
-  <link rel="stylesheet" href="/style.css" />
+  <link rel="stylesheet" href="/style.css?v=20260504-25" />
 </head>
 <body>
   <main class="auth-shell">
@@ -17,7 +17,7 @@
         <label class="field">メールアドレス
           <input id="email" type="email" autocomplete="email" inputmode="email" placeholder="kan@example.com" required />
         </label>
-        <label id="codeField" class="field" hidden>6桁コード
+        <label id="codeField" class="field auth-code-field" hidden aria-hidden="true">6桁コード
           <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" placeholder="123456" />
         </label>
         <input id="inviteCode" type="hidden" />
@@ -27,6 +27,6 @@
       <p id="authStatus" class="status"></p>
     </section>
   </main>
-  <script src="/login.js"></script>
+  <script src="/login.js?v=20260504-2"></script>
 </body>
 </html>

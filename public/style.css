@@ -527,6 +527,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   font-size: 26px;
 }
 .auth-form { display: grid; gap: 14px; margin-top: 20px; }
+.auth-form .field,
+.auth-form input,
+.auth-form button { width: 100%; }
+.auth-code-field[hidden],
+.auth-code-field[aria-hidden="true"] { display: none !important; }
 .auth-form button { width: 100%; margin-top: 4px; }
 
 @media (max-width: 640px) {
