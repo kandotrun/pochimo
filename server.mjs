@@ -19,6 +19,7 @@ await ensureDir(paths.reportsDir);
 const authService = new AuthService({ dataDir: config.dataDir });
 const abService = new AbService({ dataDir: config.dataDir });
 const aiClient = new OllamaClient(config.ollama);
+const timelineCache = new Map();
 const frameService = new FrameService({ dataDir: config.dataDir, framesDir: paths.framesDir });
 const reportService = new ReportService({
   rootDir: config.rootDir,
@@ -150,7 +151,7 @@ const server = http.createServer(async (req, res) => {
       const date = url.searchParams.get('date') || todayJst();
       const events = await frameService.listEvents(date, user.id, user.householdId);
       const profile = authService.getPetProfile(user.id, user.householdId);
-      const timeline = await aiClient.createTimeline({ events, petName: profile.name || 'ペット' });
+      const timeline = await getCachedTimeline({ date, user, events, petName: profile.name || 'ペット' });
       return sendJson(res, 200, { ok: true, ...timeline });
     }
 
@@ -228,6 +229,39 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
       }).catch(() => {});
     }
   });
+}
+
+async function getCachedTimeline({ date, user, events, petName }) {
+  const householdId = user.householdId || user.id;
+  const signature = buildTimelineSignature(events);
+  const cacheKey = `${householdId}:${date}`;
+  const cached = timelineCache.get(cacheKey);
+  if (cached?.signature === signature && cached.result) return cached.result;
+  if (cached?.signature === signature && cached.promise) return cached.promise;
+
+  const promise = aiClient.createTimeline({ events, petName })
+    .then(result => {
+      timelineCache.set(cacheKey, { signature, result, createdAt: Date.now() });
+      return result;
+    })
+    .catch(err => {
+      timelineCache.delete(cacheKey);
+      throw err;
+    });
+
+  timelineCache.set(cacheKey, { signature, promise, createdAt: Date.now() });
+  return promise;
+}
+
+function buildTimelineSignature(events) {
+  return events.map(event => [
+    event.time,
+    event.aiStatus || '',
+    event.activityCategory || '',
+    event.activityLabel || '',
+    event.notify ? '1' : '0',
+    event.timelineText || ''
+  ].join('|')).join('\n');
 }
 
 async function notifyImportantEventByEmail(event, petName = 'ペット') {

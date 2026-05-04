@@ -19,6 +19,7 @@ let latestEvents = [];
 let petProfile = {};
 let selectedDate = todayString();
 let initialLoading = true;
+let timelineRequest = null;
 
 async function refreshAll() {
   if (initialLoading) renderSkeletons();
@@ -37,23 +38,30 @@ function renderSkeletons() {
 }
 
 async function refreshTimeline() {
+  if (timelineRequest) return timelineRequest;
   renderTimelineGenerating();
-  const [events, timeline] = await Promise.all([
-    fetch(`/api/events?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()),
-    fetch(`/api/timeline?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()).catch(() => null)
-  ]);
-  latestEvents = events;
-  renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
+  const date = selectedDate;
+  timelineRequest = Promise.all([
+    fetch(`/api/events?date=${encodeURIComponent(date)}`).then(res => res.json()),
+    fetch(`/api/timeline?date=${encodeURIComponent(date)}`).then(res => res.json()).catch(() => null)
+  ]).then(([events, timeline]) => {
+    if (date !== selectedDate) return;
+    latestEvents = events;
+    renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
+  }).finally(() => {
+    timelineRequest = null;
+  });
+  return timelineRequest;
 }
 
 function renderTimelineGenerating() {
   timelineEl.className = 'timeline generating';
   timelineEl.innerHTML = `
     <div class="timeline-generating-card">
-      <div class="ai-orb" aria-hidden="true"></div>
       <div>
         <p class="generating-title">AIが今日の記録を編集中です</p>
         <p class="generating-message">細かい検知ログを読み込んで、家族で見やすい日記にまとめています。</p>
+        <div class="generating-bar" aria-hidden="true"><span></span></div>
         <div class="generating-steps" aria-hidden="true">
           <span>写真を確認中</span>
           <span>同じ行動を整理中</span>
@@ -432,7 +440,6 @@ async function refreshReport() {
 
     reportEl.classList.remove('report-placeholder');
     reportEl.textContent = json.markdown || '';
-    renderTimeline(latestEvents, json.report?.ai?.frameObservations || []);
   } catch (err) {
     reportEl.classList.add('report-placeholder');
     reportEl.textContent = `ふりかえりを読み込めませんでした: ${err.message}`;
@@ -442,4 +449,4 @@ async function refreshReport() {
 updateDateControls();
 loadPetProfile().catch(() => renderPetProfile());
 refreshAll().catch(() => {});
-setInterval(refreshAll, 5000);
+setInterval(refreshAll, 15000);
