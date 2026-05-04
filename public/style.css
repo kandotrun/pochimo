@@ -571,10 +571,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 }
 .lp-actions {
   display: flex;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 12px;
   margin-top: 28px;
   flex-wrap: wrap;
+  width: 100%;
 }
 .lp-cta {
   min-height: 48px;
@@ -587,9 +588,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   font-weight: 800;
 }
 .lp-note {
+  width: 100%;
   margin: 14px 0 0;
   color: var(--muted-foreground);
   font-size: 13px;
+  text-align: center;
 }
 .lp-preview {
   max-width: 920px;

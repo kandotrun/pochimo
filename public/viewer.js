@@ -49,18 +49,29 @@ async function refreshTimeline() {
   if (timelineRequest) return timelineRequest;
   if (!hasRenderedTimeline) renderTimelineGenerating();
   const date = selectedDate;
-  timelineRequest = Promise.all([
-    fetch(`/api/events?date=${encodeURIComponent(date)}`).then(res => res.json()),
-    fetch(`/api/timeline?date=${encodeURIComponent(date)}`).then(res => res.json()).catch(() => null)
-  ]).then(([events, timeline]) => {
+  timelineRequest = fetch(`/api/events?date=${encodeURIComponent(date)}`)
+    .then(res => res.json())
+    .then(async events => {
     if (date !== selectedDate) return;
     latestEvents = events;
-    renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { edited: Boolean(timeline?.items?.length) });
+    renderTimeline(latestEvents);
     hasRenderedTimeline = true;
+
+    const timeline = await fetchWithTimeout(`/api/timeline?date=${encodeURIComponent(date)}`, 8000)
+      .then(res => res.json())
+      .catch(() => null);
+    if (date !== selectedDate || !timeline?.items?.length) return;
+    renderTimeline(timeline.items, { edited: true });
   }).finally(() => {
     timelineRequest = null;
   });
   return timelineRequest;
+}
+
+function fetchWithTimeout(url, timeoutMs) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  return fetch(url, { signal: controller.signal }).finally(() => clearTimeout(timer));
 }
 
 function renderTimelineGenerating() {
