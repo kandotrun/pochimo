@@ -20,12 +20,12 @@ async function init() {
   setupMode = !state.hasUsers;
   const invite = new URLSearchParams(location.search).get('invite') || '';
 
-  authTitle.textContent = setupMode ? '最初のアカウントを作成' : invite ? '招待から参加' : 'ログイン';
+  authTitle.textContent = setupMode ? 'ぽちも日報を始める' : invite ? 'ぽちも日報に参加' : 'ぽちも日報';
   authLead.textContent = setupMode
-    ? 'このペット記録を開くためのアカウントを作成してください。'
+    ? 'この日報を開くためのアカウントを作成してください。'
     : invite
-      ? '家族のペット記録に参加するアカウントを作成してください。'
-      : 'ペットの記録を見るにはログインしてください。';
+      ? '家族の日報に参加するアカウントを作成してください。'
+      : '日報を見るにはログインしてください。';
   submitBtn.textContent = setupMode ? '作成して始める' : invite ? '参加する' : 'ログイン';
   usernameInput.placeholder = setupMode ? '例: kan' : '';
 
