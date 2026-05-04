@@ -62,12 +62,11 @@ PORT=8787
 ## Project structure
 
 ```text
-server.mjs                 HTTP entrypoint
 server.ts                  Hono API server
 src/config.ts              environment/path config
 src/frame-service.ts       capture persistence
-src/report-service.mjs     metrics + report generation
-src/ollama-client.mjs      Ollama Cloud/local clients
+src/report-service.ts      metrics + report generation
+src/ollama-client.ts       Ollama Cloud/local clients
 src/static-files.ts        static file serving
 src/http-utils.ts          request/response helpers
 src/time.ts                JST date helpers

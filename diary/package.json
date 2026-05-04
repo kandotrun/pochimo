@@ -12,7 +12,7 @@
     "test": "bun test",
     "check": "biome check . && tsc --noEmit && bun test",
     "format": "biome format --write .",
-    "report": "bun scripts/generate-report.mjs"
+    "report": "bun scripts/generate-report.ts"
   },
   "engines": {
     "bun": ">=1.1.0",
