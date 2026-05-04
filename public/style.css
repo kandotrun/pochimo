@@ -79,7 +79,7 @@ body {
   padding: 18px;
   border: 1px solid var(--brand-border);
   border-radius: var(--radius);
-  background: rgba(240, 253, 244, .72);
+  background: transparent;
 }
 .eyebrow {
   margin: 0 0 6px;
