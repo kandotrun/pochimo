@@ -79,10 +79,10 @@ function applyAdaptivePhotoEnhancement(img) {
     return;
   }
 
-  const target = brightness < 0.16 ? 0.58 : brightness < 0.28 ? 0.54 : 0.48;
-  const boost = clamp(target / Math.max(brightness, 0.05), 1, 3.8);
-  const contrast = clamp(1.04 + (boost - 1) * 0.14, 1, 1.38);
-  const saturate = clamp(1.02 + (boost - 1) * 0.08, 1, 1.24);
+  const target = brightness < 0.12 ? 0.72 : brightness < 0.22 ? 0.66 : brightness < 0.34 ? 0.58 : 0.5;
+  const boost = clamp(target / Math.max(brightness, 0.035), 1, 6.2);
+  const contrast = clamp(1.08 + (boost - 1) * 0.16, 1, 1.72);
+  const saturate = clamp(1.04 + (boost - 1) * 0.09, 1, 1.36);
 
   img.style.setProperty('--photo-brightness', boost.toFixed(2));
   img.style.setProperty('--photo-contrast', contrast.toFixed(2));
