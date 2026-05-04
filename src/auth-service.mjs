@@ -69,7 +69,7 @@ export class AuthService {
   }
 
   listUsers() {
-    return this.db.prepare('SELECT id, username FROM users ORDER BY id ASC').all();
+    return this.db.prepare('SELECT id, username, household_id AS householdId FROM users ORDER BY id ASC').all();
   }
 
   listHouseholdUsers(householdId) {

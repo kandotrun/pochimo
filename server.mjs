@@ -407,16 +407,106 @@ function startDailyReportScheduler() {
 }
 
 async function createReportsForAllUsers(date) {
+  const reportedHouseholds = new Set();
   for (const user of authService.listUsers()) {
+    const householdId = user.householdId || user.id;
+    if (reportedHouseholds.has(householdId)) continue;
+
     const profile = authService.getPetProfile(user.id);
     if (!profile?.name?.trim()) continue;
-    await reportService.createReport(date, {
+    const result = await reportService.createReport(date, {
       useAi: true,
       userId: user.id,
-      householdId: user.householdId,
+      householdId,
       petName: profile.name
     });
+    reportedHouseholds.add(householdId);
+    await sendDailyReportMail({ date, user, householdId, petName: profile.name, ...result });
   }
+}
+
+async function sendDailyReportMail({ date, user, householdId, petName, report, markdown }) {
+  const recipients = authService
+    .listHouseholdUsers(householdId || user.id)
+    .map(item => item.username)
+    .filter(isEmailAddress);
+  if (!recipients.length) return;
+
+  const events = await frameService.listEvents(date, user.id, householdId || user.id);
+  const photoEvents = await pickDailyReportPhotoEvents(events);
+  const attachments = [];
+  for (const event of photoEvents) {
+    const imagePath = path.join(config.rootDir, event.file);
+    const content = await fs.readFile(imagePath, 'base64').catch(() => '');
+    if (!content) continue;
+    attachments.push({
+      filename: `pochimo-${event.time}.jpg`,
+      content
+    });
+  }
+
+  await mailService.sendMail({
+    to: recipients,
+    subject: `ぽちも日報 ${date}`,
+    text: `${markdown}\n\n写真を${attachments.length}枚添付しています。`,
+    html: `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; line-height: 1.8; color: #18181b;">
+        <p style="margin: 0 0 8px; color: #166534; font-weight: 800;">ぽちも日報</p>
+        <h1 style="font-size: 24px; margin: 0 0 16px;">${escapeHtml(petName)}の一日まとめ</h1>
+        ${markdownToHtml(markdown)}
+        <p style="color: #71717a; font-size: 13px;">写真を${attachments.length}枚添付しています。</p>
+      </div>
+    `,
+    attachments,
+    tags: [{ name: 'type', value: 'daily_report' }]
+  });
+}
+
+async function pickDailyReportPhotoEvents(events) {
+  const withFiles = events.filter(event => event.file);
+  const scored = withFiles.map((event, index) => ({ event, index, score: dailyPhotoScore(event) }))
+    .sort((a, b) => b.score - a.score || b.index - a.index);
+  const picked = [];
+  const seen = new Set();
+
+  for (const item of scored) {
+    if (picked.length >= 6) break;
+    if (seen.has(item.event.file)) continue;
+    picked.push(item.event);
+    seen.add(item.event.file);
+  }
+
+  if (picked.length < 3) {
+    for (const event of withFiles.slice(-6).reverse()) {
+      if (picked.length >= 3) break;
+      if (seen.has(event.file)) continue;
+      picked.push(event);
+      seen.add(event.file);
+    }
+  }
+
+  return picked.sort((a, b) => String(a.time).localeCompare(String(b.time)));
+}
+
+function dailyPhotoScore(event) {
+  let score = Number(event.motionScore || 0);
+  if (event.ai?.petVisible === true) score += 30;
+  if (event.activityCategory && event.activityCategory !== 'not_visible' && event.activityCategory !== 'unknown') score += 12;
+  if (event.activityCategory === 'mischief') score += 40;
+  if (event.notify) score += 24;
+  if (event.timelineText) score += 8;
+  return score;
+}
+
+function markdownToHtml(markdown) {
+  const lines = String(markdown || '').split(/\r?\n/);
+  return lines.map(line => {
+    if (line.startsWith('# ')) return `<h2 style="font-size: 20px; margin: 22px 0 8px;">${escapeHtml(line.slice(2))}</h2>`;
+    if (line.startsWith('## ')) return `<h3 style="font-size: 16px; margin: 18px 0 6px;">${escapeHtml(line.slice(3))}</h3>`;
+    if (line.startsWith('- ')) return `<p style="margin: 4px 0;">・${escapeHtml(line.slice(2))}</p>`;
+    if (!line.trim()) return '<br />';
+    return `<p style="margin: 8px 0;">${escapeHtml(line)}</p>`;
+  }).join('\n');
 }
 
 function buildTimelineText(ai, motionScore = 0, petName = 'ペット') {
