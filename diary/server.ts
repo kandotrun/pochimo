@@ -2,15 +2,15 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
-import { AbService } from "./src/ab-service.mjs";
+import { AbService } from "./src/ab-service.ts";
 import { AuthService, clearSessionCookie, sessionCookie } from "./src/auth-service.mjs";
-import { config, paths } from "./src/config.mjs";
-import { FrameService } from "./src/frame-service.mjs";
-import { ensureDir, readJson, writeJson } from "./src/json-store.mjs";
+import { config, paths } from "./src/config.ts";
+import { FrameService } from "./src/frame-service.ts";
+import { ensureDir, readJson, writeJson } from "./src/json-store.ts";
 import { mailService } from "./src/mail-service.mjs";
 import { OllamaClient } from "./src/ollama-client.mjs";
 import { ReportService } from "./src/report-service.mjs";
-import { todayJst } from "./src/time.mjs";
+import { todayJst } from "./src/time.ts";
 
 type User = { id: number; username: string; householdId?: number };
 type AppBindings = { Variables: { user: User | null } };
@@ -494,7 +494,7 @@ async function notifyImportantEventByEmail(event: any, petName = "ペット") {
 }
 
 async function checkEventMailCooldown(event: any) {
-  const state = await readJson(eventMailStatePath(), {});
+  const state = await readJson<Record<string, { sentAt?: string; eventTime?: string }>>(eventMailStatePath(), {});
   const category = event.activityCategory || event.ai?.activityCategory || "unknown";
   const key = `${event.householdId || event.userId}:${category}`;
   const lastSentAt = Date.parse(state[key]?.sentAt || "");
@@ -507,7 +507,7 @@ async function checkEventMailCooldown(event: any) {
 
 async function markEventMailSent(event: any) {
   const file = eventMailStatePath();
-  const state = await readJson(file, {});
+  const state = await readJson<Record<string, { sentAt?: string; eventTime?: string }>>(file, {});
   const category = event.activityCategory || event.ai?.activityCategory || "unknown";
   const key = `${event.householdId || event.userId}:${category}`;
   state[key] = { sentAt: new Date().toISOString(), eventTime: event.time };
@@ -787,13 +787,13 @@ async function createReportsForAllUsers(date: string) {
 }
 
 async function wasDailyReportMailSent(date: string, householdId: number) {
-  const state = await readJson(dailyReportMailStatePath(date), {});
+  const state = await readJson<Record<string, { sentAt?: string }>>(dailyReportMailStatePath(date), {});
   return Boolean(state[String(householdId)]?.sentAt);
 }
 
 async function markDailyReportMailSent(date: string, householdId: number) {
   const file = dailyReportMailStatePath(date);
-  const state = await readJson(file, {});
+  const state = await readJson<Record<string, { sentAt?: string }>>(file, {});
   state[String(householdId)] = { sentAt: new Date().toISOString() };
   await writeJson(file, state);
 }

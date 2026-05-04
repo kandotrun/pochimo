@@ -1,7 +1,7 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
-import { fileExists, readJson, writeJson } from './json-store.mjs';
-import { todayJst } from './time.mjs';
+import { fileExists, readJson, writeJson } from './json-store.ts';
+import { todayJst } from './time.ts';
 
 const NEXT_CHECKS = [
   '水飲み場・ごはん場・トイレなどの注目エリアを指定できるようにする',

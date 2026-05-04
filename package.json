@@ -8,6 +8,7 @@
     "start": "npm --prefix diary run start",
     "start:node": "npm --prefix diary run start:node",
     "typecheck": "npm --prefix diary run typecheck",
+    "test": "npm --prefix diary run test",
     "check": "npm --prefix diary run check",
     "format": "npm --prefix diary run format",
     "report": "npm --prefix diary run report"

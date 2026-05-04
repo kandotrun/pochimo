@@ -63,14 +63,15 @@ PORT=8787
 
 ```text
 server.mjs                 HTTP entrypoint
-src/config.mjs             environment/path config
-src/frame-service.mjs      capture persistence
+server.ts                  Hono API server
+src/config.ts              environment/path config
+src/frame-service.ts       capture persistence
 src/report-service.mjs     metrics + report generation
 src/ollama-client.mjs      Ollama Cloud/local clients
-src/static-files.mjs       static file serving
-src/http-utils.mjs         request/response helpers
-src/time.mjs               JST date helpers
-src/json-store.mjs         JSON/file helpers
+src/static-files.ts        static file serving
+src/http-utils.ts          request/response helpers
+src/time.ts                JST date helpers
+src/json-store.ts          JSON/file helpers
 public/                    browser UI
 docs/                      product notes
 ```

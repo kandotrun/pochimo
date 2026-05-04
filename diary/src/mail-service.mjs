@@ -1,4 +1,4 @@
-import { config } from './config.mjs';
+import { config } from './config.ts';
 
 const RESEND_API_URL = 'https://api.resend.com/emails';
 
