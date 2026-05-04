@@ -11,15 +11,15 @@
   --card-foreground: #09090b;
   --border: #e4e4e7;
   --input: #e4e4e7;
-  --primary: #2563eb;
+  --primary: #16a34a;
   --primary-foreground: #ffffff;
   --secondary: #ecfdf5;
-  --secondary-foreground: #1e3a8a;
-  --accent: #dbeafe;
-  --accent-foreground: #1e3a8a;
-  --brand-soft: #eff6ff;
-  --brand-border: #bfdbfe;
-  --success: #2563eb;
+  --secondary-foreground: #14532d;
+  --accent: #dcfce7;
+  --accent-foreground: #14532d;
+  --brand-soft: #f0fdf4;
+  --brand-border: #bbf7d0;
+  --success: #16a34a;
   --warning: #f59e0b;
   --danger: #ef4444;
   --radius: 14px;
@@ -51,7 +51,7 @@ body {
   gap: 4px;
   margin-bottom: 18px;
   padding: 4px;
-  background: rgba(239, 246, 255, .92);
+  background: rgba(240, 253, 244, .92);
   border: 1px solid var(--brand-border);
   border-radius: calc(var(--radius) + 4px);
   backdrop-filter: blur(12px);
@@ -70,7 +70,7 @@ body {
 .tab-link.active {
   background: var(--primary);
   color: var(--primary-foreground);
-  box-shadow: 0 1px 2px rgba(37, 99, 235, .18);
+  box-shadow: 0 1px 2px rgba(22, 163, 74, .18);
 }
 .hero {
   align-items: flex-start;
@@ -79,7 +79,7 @@ body {
   padding: 18px;
   border: 1px solid var(--brand-border);
   border-radius: var(--radius);
-  background: rgba(239, 246, 255, .72);
+  background: rgba(240, 253, 244, .72);
 }
 .eyebrow {
   margin: 0 0 6px;
@@ -107,7 +107,7 @@ h2 { font-size: 22px; font-weight: 700; }
   font-weight: 600;
   white-space: nowrap;
 }
-.health-pill.ok { color: #1e40af; border-color: #bfdbfe; background: #eff6ff; }
+.health-pill.ok { color: #166534; border-color: #bbf7d0; background: #f0fdf4; }
 .health-pill.bad { color: #991b1b; border-color: #fecaca; background: #fef2f2; }
 
 .camera-card, .card, .stat-card {
