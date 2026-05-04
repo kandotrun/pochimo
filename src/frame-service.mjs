@@ -7,6 +7,7 @@ export class FrameService {
   constructor({ dataDir, framesDir }) {
     this.dataDir = dataDir;
     this.framesDir = framesDir;
+    this.writeQueues = new Map();
   }
 
   async saveCapture(body, userId, householdId = userId) {
@@ -35,9 +36,10 @@ export class FrameService {
     };
 
     const eventsFile = path.join(this.dataDir, `${date}.events.json`);
-    const events = await readJson(eventsFile, []);
-    events.push(event);
-    await writeJson(eventsFile, events);
+    const events = await this.#updateEventsFile(eventsFile, events => {
+      if (!events.some(item => item.time === event.time)) events.push(event);
+      return events;
+    });
 
     return { event, count: events.length };
   }
@@ -60,13 +62,30 @@ export class FrameService {
 
   async updateEvent(date, time, patch) {
     const eventsFile = path.join(this.dataDir, `${date}.events.json`);
-    const events = await readJson(eventsFile, []);
-    const index = events.findIndex(event => event.time === time);
-    if (index === -1) throw new Error('event not found');
+    let updated = null;
+    await this.#updateEventsFile(eventsFile, events => {
+      const index = events.findIndex(event => event.time === time);
+      if (index === -1) throw new Error('event not found');
+      events[index] = { ...events[index], ...patch };
+      updated = events[index];
+      return events;
+    });
+    return updated;
+  }
 
-    events[index] = { ...events[index], ...patch };
-    await writeJson(eventsFile, events);
-    return events[index];
+  async #updateEventsFile(eventsFile, updater) {
+    const previous = this.writeQueues.get(eventsFile) || Promise.resolve();
+    const next = previous.catch(() => {}).then(async () => {
+      const events = await readJson(eventsFile, []);
+      const updated = await updater(events);
+      updated.sort((a, b) => String(a.time).localeCompare(String(b.time)));
+      await writeJson(eventsFile, updated);
+      return updated;
+    });
+    this.writeQueues.set(eventsFile, next.finally(() => {
+      if (this.writeQueues.get(eventsFile) === next) this.writeQueues.delete(eventsFile);
+    }));
+    return next;
   }
 }
 
