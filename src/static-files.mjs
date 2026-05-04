@@ -14,7 +14,8 @@ export async function serveStatic({ publicDir, pathname, res }) {
     ['/viewer', '/viewer.html'],
     ['/camera', '/camera.html'],
     ['/login', '/login.html'],
-    ['/settings', '/settings.html']
+    ['/settings', '/settings.html'],
+    ['/lp', '/lp.html']
   ]);
   const requested = routeMap.get(pathname) || pathname;
   const filePath = path.normalize(path.join(publicDir, requested));

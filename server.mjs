@@ -212,6 +212,8 @@ function isProfileSetupPath(pathname) {
 
 function isPublicPath(pathname) {
   return pathname === '/login'
+    || pathname === '/lp'
+    || pathname === '/lp.html'
     || pathname === '/login.html'
     || pathname === '/login.js'
     || pathname === '/style.css'
