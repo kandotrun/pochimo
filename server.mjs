@@ -196,7 +196,7 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
   queueMicrotask(async () => {
     try {
       const ai = await aiClient.analyzeImages([base64], { petName });
-      await frameService.updateEvent(date, event.time, {
+      const patch = {
         aiStatus: ai.enabled ? 'done' : 'failed',
         ai,
         activityCategory: ai.activityCategory || 'unknown',
@@ -204,6 +204,14 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
         notify: Boolean(ai.notify),
         notificationText: ai.notificationText || '',
         timelineText: buildTimelineText(ai, event.motionScore, petName)
+      };
+      const updated = await frameService.updateEvent(date, event.time, patch);
+      await notifyImportantEventByEmail(updated, petName).catch(async err => {
+        console.warn(`event mail failed: ${err.message}`);
+        await frameService.updateEvent(date, event.time, {
+          notificationStatus: 'failed',
+          notificationError: err.message
+        }).catch(() => {});
       });
     } catch (err) {
       await frameService.updateEvent(date, event.time, {
@@ -212,6 +220,67 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
       }).catch(() => {});
     }
   });
+}
+
+async function notifyImportantEventByEmail(event, petName = 'ペット') {
+  if (!shouldSendEventMail(event)) return;
+
+  const recipients = authService
+    .listHouseholdUsers(event.householdId || event.userId)
+    .map(user => user.username)
+    .filter(isEmailAddress);
+  if (!recipients.length) return;
+
+  const imagePath = path.join(config.rootDir, event.file);
+  const imageBase64 = await fs.readFile(imagePath, 'base64');
+  const label = event.activityLabel || categoryLabel(event.activityCategory) || '通知';
+  const message = event.notificationText || event.timelineText || `${petName}の様子を確認してください。`;
+  const timeLabel = event.time.replace('T', ' ');
+
+  const result = await mailService.sendMail({
+    to: recipients,
+    subject: `ぽちも日報: ${label}`,
+    text: `${message}\n\n撮影時刻: ${timeLabel}\n写真を添付しています。`,
+    html: `
+      <div style="font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Hiragino Sans', sans-serif; line-height: 1.7; color: #18181b;">
+        <p style="margin: 0 0 8px; color: #166534; font-weight: 800;">ぽちも日報</p>
+        <h1 style="font-size: 22px; margin: 0 0 12px;">${escapeHtml(label)}</h1>
+        <p>${escapeHtml(message)}</p>
+        <p style="color: #71717a; font-size: 13px;">撮影時刻: ${escapeHtml(timeLabel)}</p>
+        <p>写真を添付しています。</p>
+      </div>
+    `,
+    attachments: [{
+      filename: `pochimo-${event.time}.jpg`,
+      content: imageBase64
+    }],
+    tags: [{ name: 'type', value: 'event_alert' }]
+  });
+
+  await frameService.updateEvent(event.time.slice(0, 10), event.time, {
+    notificationStatus: result.skipped ? 'skipped' : 'sent',
+    notificationSentAt: new Date().toISOString(),
+    notificationRecipients: recipients
+  });
+}
+
+function shouldSendEventMail(event) {
+  if (event.notificationStatus === 'sent') return false;
+  if (!event.file) return false;
+  return Boolean(event.notify) || event.activityCategory === 'mischief';
+}
+
+function isEmailAddress(value) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || ''));
+}
+
+function escapeHtml(value) {
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#039;');
 }
 
 async function sendLoginCodeMail({ email, code }) {

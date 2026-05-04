@@ -13,7 +13,7 @@ export class MailService {
     return Boolean(this.apiKey);
   }
 
-  async sendMail({ to, subject, html, text, tags = [] }) {
+  async sendMail({ to, subject, html, text, attachments = [], tags = [] }) {
     if (!this.enabled) {
       console.log('[mail] RESEND_API_KEY is not set. Skip sending:', { to, subject });
       return { ok: false, skipped: true, reason: 'RESEND_API_KEY is not set' };
@@ -25,6 +25,7 @@ export class MailService {
       subject,
       ...(html ? { html } : {}),
       ...(text ? { text } : {}),
+      ...(attachments.length ? { attachments } : {}),
       ...(this.replyTo ? { reply_to: this.replyTo } : {}),
       ...(tags.length ? { tags } : {})
     };

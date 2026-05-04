@@ -72,6 +72,10 @@ export class AuthService {
     return this.db.prepare('SELECT id, username FROM users ORDER BY id ASC').all();
   }
 
+  listHouseholdUsers(householdId) {
+    return this.db.prepare('SELECT id, username FROM users WHERE household_id = ? ORDER BY id ASC').all(Number(householdId));
+  }
+
   createFirstUser({ username, password }) {
     if (this.hasUsers()) throw new Error('user already exists');
     return this.#createUser({ username, password });
