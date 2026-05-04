@@ -268,8 +268,8 @@ function renderTimeline(events, options = {}) {
   }
 
   const shown = options.edited
-    ? events.slice(-120).reverse()
-    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-120).reverse();
+    ? events.slice(-80).reverse()
+    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-80).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -330,6 +330,10 @@ function groupTimelineEvents(events) {
       previous.events.push(event);
       previous.endTime = event.time;
       previous.time = event.time;
+      if (isQuietRestCategory(previous.activityCategory) && isQuietRestCategory(event.activityCategory)) {
+        previous.activityCategory = 'rest';
+        previous.activityLabel = '休憩中';
+      }
       previous.motionScore = Math.max(Number(previous.motionScore || 0), Number(event.motionScore || 0));
       previous.notify = Boolean(previous.notify || event.notify);
       previous.notificationText = previous.notificationText || event.notificationText || '';
@@ -346,16 +350,34 @@ function groupTimelineEvents(events) {
 function shouldMergeTimelineEvents(group, event) {
   const last = group.events.at(-1);
   if (!last) return false;
-  if (last.notify || event.notify) return false;
-  if (last.activityCategory !== event.activityCategory) return false;
+  const sameCategory = last.activityCategory === event.activityCategory
+    || (isQuietRestCategory(last.activityCategory) && isQuietRestCategory(event.activityCategory));
+  if (!sameCategory) return false;
 
   const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(last.time)) / 60000;
-  if (minutes > 12) return false;
+  if (last.notify || event.notify) return minutes <= 20 && sameTimelinePlace(last, event);
 
-  const quietCategories = ['sleep', 'rest', 'not_visible', 'unknown'];
-  if (quietCategories.includes(event.activityCategory)) return true;
+  const quietCategories = ['not_visible', 'unknown'];
+  if (isQuietRestCategory(event.activityCategory) || quietCategories.includes(event.activityCategory)) return minutes <= 45 && sameTimelinePlace(last, event);
+  if (minutes > 25) return false;
 
   return normalizeTimelineText(last.timelineText) === normalizeTimelineText(event.timelineText);
+}
+
+function isQuietRestCategory(category) {
+  return ['sleep', 'rest'].includes(category);
+}
+
+function sameTimelinePlace(a, b) {
+  const aPlace = placeFromTimelineText(a.ai?.scene || a.timelineText || '');
+  const bPlace = placeFromTimelineText(b.ai?.scene || b.timelineText || '');
+  return !aPlace || !bPlace || aPlace === bPlace;
+}
+
+function placeFromTimelineText(text) {
+  const value = String(text || '');
+  const places = ['ケージの中', 'テーブルの下', '椅子の上', '椅子の近く', '床の上', 'クッションのあたり', 'キャリーケースのあたり'];
+  return places.find(place => value.includes(place)) || '';
 }
 
 function summarizeTimelineGroup(events) {
@@ -364,8 +386,7 @@ function summarizeTimelineGroup(events) {
   if (events.length < 2) return text;
 
   const label = latest.activityLabel || categoryLabel(latest.activityCategory);
-  if (latest.activityCategory === 'sleep') return `${label}: 同じ場所で休んでいます。`;
-  if (latest.activityCategory === 'rest') return `${label}: しばらく同じ場所で過ごしています。`;
+  if (isQuietRestCategory(latest.activityCategory)) return `${label}: しばらく同じ場所で休んでいます。`;
   if (latest.activityCategory === 'not_visible') return `${label}: しばらく姿が確認しづらい状態です。`;
   return text;
 }

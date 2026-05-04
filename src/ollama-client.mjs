@@ -153,7 +153,7 @@ ${fallbackMarkdown}`;
 - イタズラ/危険/通知対象は必ず残す
 - 休憩や睡眠はまとまった変化として残す
 - 全体を見たうえで、同じ状態だけをまとめる。代表サンプリングで時間帯を捨てない
-- 最大40件。多すぎる場合も時間帯を飛ばさず、近い記録をまとめる
+- 最大20件。多すぎる場合も時間帯を飛ばさず、近い記録を大きめにまとめる
 - 必ずJSONだけ返す
 
 形式:
@@ -353,9 +353,13 @@ function createFallbackTimeline(events, petName = 'ペット') {
   for (const event of visible) {
     const previous = groups.at(-1);
     const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
-    if (previous && !previous.notify && !event.notify && previous.category === category && Math.abs(parseEventTime(event.time) - parseEventTime(previous.endTime)) <= 12 * 60 * 1000) {
+    if (previous && shouldMergeFallbackTimelineEvents(previous, event, category)) {
       previous.events.push(event);
       previous.endTime = event.time;
+      if (isQuietRestCategory(previous.category) && isQuietRestCategory(category)) {
+        previous.category = 'rest';
+        previous.label = '休憩中';
+      }
       previous.title = fallbackGroupTitle(previous.events, petName);
       previous.detail = event.ai?.scene || previous.detail || '';
       continue;
@@ -377,6 +381,27 @@ function createFallbackTimeline(events, petName = 'ペット') {
   return groups.map(({ events: _events, ...item }) => item);
 }
 
+function shouldMergeFallbackTimelineEvents(previous, event, category) {
+  const last = previous.events.at(-1);
+  if (!last) return false;
+  const sameCategory = previous.category === category || (isQuietRestCategory(previous.category) && isQuietRestCategory(category));
+  if (!sameCategory) return false;
+
+  const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(previous.endTime)) / 60000;
+  const previousPlace = placeFromScene(previous.detail || previous.title || '');
+  const eventPlace = placeFromScene(event.ai?.scene || event.timelineText || '');
+  const samePlace = !previousPlace || !eventPlace || previousPlace === eventPlace;
+
+  if (!samePlace) return false;
+  if (previous.notify || event.notify) return minutes <= 20;
+  if (isQuietRestCategory(category) || ['not_visible', 'unknown'].includes(category)) return minutes <= 45;
+  return minutes <= 25;
+}
+
+function isQuietRestCategory(category) {
+  return ['sleep', 'rest'].includes(category);
+}
+
 function naturalTimelineTitle(event, petName) {
   const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
   if (event.notificationText) return event.notificationText;
@@ -391,8 +416,7 @@ function fallbackGroupTitle(events, petName) {
   const category = latest.activityCategory || latest.ai?.activityCategory || 'unknown';
   const label = latest.activityLabel || latest.ai?.activityLabel || categoryToLabel(category);
   const place = placeFromScene(latest.ai?.scene || latest.timelineText || '');
-  if (category === 'sleep') return place ? `${petName}は${place}でしばらく休んでいました。` : `${petName}はしばらく休んでいました。`;
-  if (category === 'rest') return place ? `${petName}は${place}でしばらく過ごしていました。` : `${petName}はしばらく過ごしていました。`;
+  if (category === 'sleep' || category === 'rest') return place ? `${petName}は${place}でしばらく休んでいました。` : `${petName}はしばらく休んでいました。`;
   if (category === 'not_visible') return `しばらく${petName}の姿が確認しづらい状態でした。`;
   if (label === '記録') return naturalTimelineTitle(latest, petName);
   return `${label}: ${naturalTimelineTitle(latest, petName)}`;
@@ -411,7 +435,7 @@ function categoryToLabel(category) {
 function normalizeTimelineItems(items, events) {
   if (!Array.isArray(items)) return [];
   const eventTimes = new Set(events.map(event => event.time));
-  return items.slice(0, 80).map(item => {
+  return items.slice(0, 40).map(item => {
     const startTime = eventTimes.has(item.startTime) ? item.startTime : nearestEventTime(item.startTime, events);
     const endTime = eventTimes.has(item.endTime) ? item.endTime : startTime;
     return {
