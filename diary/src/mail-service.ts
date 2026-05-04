@@ -1,8 +1,24 @@
-import { config } from './config.ts';
+import { config } from "./config.ts";
 
-const RESEND_API_URL = 'https://api.resend.com/emails';
+const RESEND_API_URL = "https://api.resend.com/emails";
+
+export type MailAttachment = { filename: string; content: string };
+export type MailTag = { name: string; value: string };
+
+export type SendMailInput = {
+  to: string | string[];
+  subject: string;
+  html?: string;
+  text?: string;
+  attachments?: MailAttachment[];
+  tags?: MailTag[];
+};
 
 export class MailService {
+  apiKey?: string;
+  from: string;
+  replyTo?: string;
+
   constructor({ apiKey = config.mail.resendApiKey, from = config.mail.from, replyTo = config.mail.replyTo } = {}) {
     this.apiKey = apiKey;
     this.from = from;
@@ -13,10 +29,10 @@ export class MailService {
     return Boolean(this.apiKey);
   }
 
-  async sendMail({ to, subject, html, text, attachments = [], tags = [] }) {
+  async sendMail({ to, subject, html, text, attachments = [], tags = [] }: SendMailInput) {
     if (!this.enabled) {
-      console.log('[mail] RESEND_API_KEY is not set. Skip sending:', { to, subject });
-      return { ok: false, skipped: true, reason: 'RESEND_API_KEY is not set' };
+      console.log("[mail] RESEND_API_KEY is not set. Skip sending:", { to, subject });
+      return { ok: false, skipped: true, reason: "RESEND_API_KEY is not set" };
     }
 
     const body = {
@@ -27,16 +43,16 @@ export class MailService {
       ...(text ? { text } : {}),
       ...(attachments.length ? { attachments } : {}),
       ...(this.replyTo ? { reply_to: this.replyTo } : {}),
-      ...(tags.length ? { tags } : {})
+      ...(tags.length ? { tags } : {}),
     };
 
     const res = await fetch(RESEND_API_URL, {
-      method: 'POST',
+      method: "POST",
       headers: {
         authorization: `Bearer ${this.apiKey}`,
-        'content-type': 'application/json'
+        "content-type": "application/json",
       },
-      body: JSON.stringify(body)
+      body: JSON.stringify(body),
     });
 
     const json = await res.json().catch(() => ({}));

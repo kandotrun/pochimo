@@ -6,6 +6,9 @@
     "moduleResolution": "NodeNext",
     "allowImportingTsExtensions": true,
     "strict": true,
+    "noImplicitAny": false,
+    "useUnknownInCatchVariables": false,
+    "strictPropertyInitialization": false,
     "noEmit": true,
     "skipLibCheck": true,
     "types": ["node", "bun"]

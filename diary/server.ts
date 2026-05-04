@@ -3,13 +3,13 @@ import path from "node:path";
 import { serve } from "@hono/node-server";
 import { Hono } from "hono";
 import { AbService } from "./src/ab-service.ts";
-import { AuthService, clearSessionCookie, sessionCookie } from "./src/auth-service.mjs";
+import { AuthService, clearSessionCookie, sessionCookie } from "./src/auth-service.ts";
 import { config, paths } from "./src/config.ts";
 import { FrameService } from "./src/frame-service.ts";
 import { ensureDir, readJson, writeJson } from "./src/json-store.ts";
-import { mailService } from "./src/mail-service.mjs";
-import { OllamaClient } from "./src/ollama-client.mjs";
-import { ReportService } from "./src/report-service.mjs";
+import { mailService } from "./src/mail-service.ts";
+import { OllamaClient } from "./src/ollama-client.ts";
+import { ReportService } from "./src/report-service.ts";
 import { todayJst } from "./src/time.ts";
 
 type User = { id: number; username: string; householdId?: number };
@@ -125,7 +125,7 @@ app.post("/api/auth/email/start", async (c) => {
   enforceRateLimit(`email-start:ip:${ip}`, 30, 15 * 60 * 1000);
   enforceRateLimit(`email-start:email:${emailKey}`, 5, 15 * 60 * 1000);
   const loginCode = authService.createEmailLoginCode(body);
-  if (!loginCode.skipped) await sendLoginCodeMail(loginCode);
+  if (!("skipped" in loginCode) || !loginCode.skipped) await sendLoginCodeMail(loginCode);
   return c.json({ ok: true, email: loginCode.email, expiresAt: loginCode.expiresAt });
 });
 
@@ -811,7 +811,7 @@ async function sendDailyReportMail({ date, user, householdId, petName, markdown 
 
   const events = await frameService.listEvents(date, user.id, householdId || user.id);
   const photoEvents = await pickDailyReportPhotoEvents(events);
-  const attachments = [];
+  const attachments: { filename: string; content: string }[] = [];
   for (const event of photoEvents) {
     const imagePath = path.join(config.rootDir, event.file);
     const content = await fs.readFile(imagePath, "base64").catch(() => "");
@@ -841,8 +841,8 @@ async function pickDailyReportPhotoEvents(events: any[]) {
   const scored = withFiles
     .map((event, index) => ({ event, index, score: dailyPhotoScore(event) }))
     .sort((a, b) => b.score - a.score || b.index - a.index);
-  const picked = [];
-  const seen = new Set();
+  const picked: any[] = [];
+  const seen = new Set<string>();
 
   for (const item of scored) {
     if (picked.length >= 6) break;

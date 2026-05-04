@@ -1,5 +1,16 @@
-function observationPrompt(petName = 'ペット') {
-  const name = String(petName || 'ペット').trim() || 'ペット';
+type DiaryEvent = Record<string, any>;
+type TimelineItem = Record<string, any>;
+type TimelineGroup = TimelineItem & {
+  events: DiaryEvent[];
+  endTime: string;
+  category: string;
+  label: string;
+  title: string;
+  detail: string;
+};
+
+function observationPrompt(petName = "ペット") {
+  const name = String(petName || "ペット").trim() || "ペット";
   return `あなたはペット見守り日報AIです。画像は室内に置いたスマホカメラの代表フレームです。
 
 対象のペット名は「${name}」です。
@@ -28,7 +39,7 @@ notify=true は、イタズラ疑い・危険そうな状態・すぐ確認し�
 }
 
 function extractJson(raw) {
-  const text = String(raw || '').trim();
+  const text = String(raw || "").trim();
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i)?.[1];
   const jsonText = fenced || text.match(/\{[\s\S]*\}/)?.[0] || text;
   return JSON.parse(jsonText);
@@ -40,16 +51,30 @@ function safeObservationParse(raw, fallbackConcern) {
   } catch {
     return {
       petVisible: null,
-      scene: String(raw || '').trim() || '不明',
-      petActivity: 'JSON解析失敗',
+      scene: String(raw || "").trim() || "不明",
+      petActivity: "JSON解析失敗",
       concerns: [fallbackConcern],
-      ownerChecks: []
+      ownerChecks: [],
     };
   }
 }
 
 export class OllamaClient {
-  constructor(options) {
+  localUrl?: string;
+  localVisionModel: string;
+  cloudUrl: string;
+  cloudVisionModel: string;
+  cloudReportModel: string;
+  apiKey?: string;
+
+  constructor(options: {
+    localUrl?: string;
+    localVisionModel: string;
+    cloudUrl: string;
+    cloudVisionModel: string;
+    cloudReportModel: string;
+    apiKey?: string;
+  }) {
     this.localUrl = options.localUrl;
     this.localVisionModel = options.localVisionModel;
     this.cloudUrl = options.cloudUrl;
@@ -58,28 +83,29 @@ export class OllamaClient {
     this.apiKey = options.apiKey;
   }
 
-  async analyzeImages(images, { petName = 'ペット' } = {}) {
+  async analyzeImages(images, { petName = "ペット" } = {}) {
     if (images.length === 0) {
-      return { enabled: false, model: this.cloudVisionModel, summary: '解析対象の画像がありません。' };
+      return { enabled: false, model: this.cloudVisionModel, summary: "解析対象の画像がありません。" };
     }
 
     if (this.apiKey) {
-      const cloud = images.length > 1
-        ? await this.#tryCloudVisionSingleFrames(images, new Error('batch skipped'), petName)
-        : await this.#tryCloudVision(images, petName);
+      const cloud =
+        images.length > 1
+          ? await this.#tryCloudVisionSingleFrames(images, new Error("batch skipped"), petName)
+          : await this.#tryCloudVision(images, petName);
       if (cloud) return cloud;
     }
 
     return this.#localVision(images, petName);
   }
 
-  async polishReport({ report, fallbackMarkdown, petName = 'ペット' }) {
+  async polishReport({ report, fallbackMarkdown, petName = "ペット" }) {
     if (!this.apiKey || report.capturedFrames === 0) {
       return {
         enabled: false,
         model: this.cloudReportModel,
         markdown: fallbackMarkdown,
-        summary: 'Ollama Cloud API key未設定または画像なし'
+        summary: "Ollama Cloud API key未設定または画像なし",
       };
     }
 
@@ -105,44 +131,52 @@ ${fallbackMarkdown}`;
       const data = await this.#chatCompletions({
         model: this.cloudReportModel,
         messages: [
-          { role: 'system', content: 'あなたはペット見守り日報を書くAIです。観察事実をやさしく、ただし断定しすぎず整理します。' },
-          { role: 'user', content: prompt }
+          {
+            role: "system",
+            content: "あなたはペット見守り日報を書くAIです。観察事実をやさしく、ただし断定しすぎず整理します。",
+          },
+          { role: "user", content: prompt },
         ],
         temperature: 0.3,
-        max_tokens: 2600
+        max_tokens: 2600,
       });
 
       const markdown = data.choices?.[0]?.message?.content?.trim();
-      if (!markdown) throw new Error('empty response');
-      if (!isCompleteReportMarkdown(markdown)) throw new Error('incomplete report markdown');
+      if (!markdown) throw new Error("empty response");
+      if (!isCompleteReportMarkdown(markdown)) throw new Error("incomplete report markdown");
       return { enabled: true, model: this.cloudReportModel, markdown };
     } catch (err) {
       return {
         enabled: false,
         model: this.cloudReportModel,
         markdown: fallbackMarkdown,
-        summary: `Ollama Cloud整形に失敗: ${err.message}`
+        summary: `Ollama Cloud整形に失敗: ${err.message}`,
       };
     }
   }
 
-  async createTimeline({ events, petName = 'ペット' }) {
+  async createTimeline({ events, petName = "ペット" }) {
     const fallback = createFallbackTimeline(events, petName);
     if (!this.apiKey || !events.length) {
-      return { enabled: false, model: this.cloudReportModel, items: fallback, summary: 'API keyなし、またはイベントなし' };
+      return {
+        enabled: false,
+        model: this.cloudReportModel,
+        items: fallback,
+        summary: "API keyなし、またはイベントなし",
+      };
     }
 
-    const compactEvents = events.map(event => ({
+    const compactEvents = events.map((event) => ({
       time: event.time,
-      activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
-      activityLabel: event.activityLabel || event.ai?.activityLabel || '',
+      activityCategory: event.activityCategory || event.ai?.activityCategory || "unknown",
+      activityLabel: event.activityLabel || event.ai?.activityLabel || "",
       petVisible: event.ai?.petVisible,
-      petActivity: event.ai?.petActivity || '',
-      scene: event.ai?.scene || '',
+      petActivity: event.ai?.petActivity || "",
+      scene: event.ai?.scene || "",
       notify: Boolean(event.notify),
-      notificationText: event.notificationText || '',
-      timelineText: event.timelineText || '',
-      motionScore: Number(event.motionScore || 0)
+      notificationText: event.notificationText || "",
+      timelineText: event.timelineText || "",
+      motionScore: Number(event.motionScore || 0),
     }));
 
     const prompt = `あなたは「ぽちも日報」の編集AIです。以下の検知イベント列から、飼い主に見せる価値があるタイムラインだけを作ってください。
@@ -182,43 +216,63 @@ ${JSON.stringify(compactEvents)}`;
       const data = await this.#chatCompletions({
         model: this.cloudReportModel,
         messages: [
-          { role: 'system', content: 'あなたはペットの日報タイムラインを編集するAIです。細かいログを読みやすい日記に圧縮します。' },
-          { role: 'user', content: prompt }
+          {
+            role: "system",
+            content: "あなたはペットの日報タイムラインを編集するAIです。細かいログを読みやすい日記に圧縮します。",
+          },
+          { role: "user", content: prompt },
         ],
         temperature: 0.2,
-        max_tokens: 1800
+        max_tokens: 1800,
       });
 
-      const raw = data.choices?.[0]?.message?.content || '';
+      const raw = data.choices?.[0]?.message?.content || "";
       const parsed = extractJson(raw);
       const items = normalizeTimelineItems(parsed.items, events);
-      return { enabled: true, model: this.cloudReportModel, items: items.length ? items : fallback, raw: String(raw).trim() };
+      return {
+        enabled: true,
+        model: this.cloudReportModel,
+        items: items.length ? items : fallback,
+        raw: String(raw).trim(),
+      };
     } catch (err) {
-      return { enabled: false, model: this.cloudReportModel, items: fallback, summary: `LLMタイムライン生成に失敗: ${err.message}` };
+      return {
+        enabled: false,
+        model: this.cloudReportModel,
+        items: fallback,
+        summary: `LLMタイムライン生成に失敗: ${err.message}`,
+      };
     }
   }
 
-  async chatTimeline({ events, prompt, petName = 'ペット' }) {
+  async chatTimeline({ events, prompt, petName = "ペット" }) {
     const fallback = createFallbackTimeline(events, petName);
     if (!this.apiKey || !events.length) {
-      return { enabled: false, model: this.cloudReportModel, items: fallback, reply: '今日はまだ答えられる記録がありません。' };
+      return {
+        enabled: false,
+        model: this.cloudReportModel,
+        items: fallback,
+        reply: "今日はまだ答えられる記録がありません。",
+      };
     }
 
-    const compactEvents = events.map(event => ({
+    const compactEvents = events.map((event) => ({
       time: event.time,
-      cameraLabel: event.cameraLabel || '',
-      activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
-      activityLabel: event.activityLabel || event.ai?.activityLabel || '',
+      cameraLabel: event.cameraLabel || "",
+      activityCategory: event.activityCategory || event.ai?.activityCategory || "unknown",
+      activityLabel: event.activityLabel || event.ai?.activityLabel || "",
       petVisible: event.ai?.petVisible,
-      petActivity: event.ai?.petActivity || '',
-      scene: event.ai?.scene || '',
+      petActivity: event.ai?.petActivity || "",
+      scene: event.ai?.scene || "",
       notify: Boolean(event.notify),
-      notificationText: event.notificationText || '',
-      timelineText: event.timelineText || '',
-      motionScore: Number(event.motionScore || 0)
+      notificationText: event.notificationText || "",
+      timelineText: event.timelineText || "",
+      motionScore: Number(event.motionScore || 0),
     }));
 
-    const userPrompt = String(prompt || '').trim().slice(0, 240);
+    const userPrompt = String(prompt || "")
+      .trim()
+      .slice(0, 240);
     const request = `ユーザーの質問: ${userPrompt}
 
 対象のペット名: ${petName}
@@ -254,50 +308,58 @@ ${JSON.stringify(compactEvents)}`;
       const data = await this.#chatCompletions({
         model: this.cloudReportModel,
         messages: [
-          { role: 'system', content: 'あなたは「ぽちも日報」のチャットAIです。ペットの一日記録を読み、家族に分かる言葉で答えます。' },
-          { role: 'user', content: request }
+          {
+            role: "system",
+            content: "あなたは「ぽちも日報」のチャットAIです。ペットの一日記録を読み、家族に分かる言葉で答えます。",
+          },
+          { role: "user", content: request },
         ],
         temperature: 0.2,
-        max_tokens: 1600
+        max_tokens: 1600,
       });
 
-      const raw = data.choices?.[0]?.message?.content || '';
+      const raw = data.choices?.[0]?.message?.content || "";
       const parsed = extractJson(raw);
       const items = normalizeTimelineItems(parsed.items, events);
       return {
         enabled: true,
         model: this.cloudReportModel,
-        reply: String(parsed.reply || '').trim() || '近い記録を表示しました。',
+        reply: String(parsed.reply || "").trim() || "近い記録を表示しました。",
         items: items.length ? items : fallback.slice(0, 8),
-        raw: String(raw).trim()
+        raw: String(raw).trim(),
       };
-    } catch (err) {
-      return { enabled: false, model: this.cloudReportModel, items: fallback.slice(0, 8), reply: `AIの返答生成に失敗しました。近い記録を表示します。` };
+    } catch {
+      return {
+        enabled: false,
+        model: this.cloudReportModel,
+        items: fallback.slice(0, 8),
+        reply: `AIの返答生成に失敗しました。近い記録を表示します。`,
+      };
     }
   }
 
   async #tryCloudVision(images, petName) {
     try {
       const content = [
-        { type: 'text', text: observationPrompt(petName) },
-        ...images.map(image => ({ type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }))
+        { type: "text", text: observationPrompt(petName) },
+        ...images.map((image) => ({ type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } })),
       ];
 
       const data = await this.#chatCompletions({
         model: this.cloudVisionModel,
-        messages: [{ role: 'user', content }],
+        messages: [{ role: "user", content }],
         temperature: 0.1,
-        max_tokens: 1200
+        max_tokens: 1200,
       });
 
-      const raw = data.choices?.[0]?.message?.content || '';
+      const raw = data.choices?.[0]?.message?.content || "";
       return {
         enabled: true,
-        provider: 'ollama-cloud',
+        provider: "ollama-cloud",
         model: this.cloudVisionModel,
         framesAnalyzed: images.length,
         raw: String(raw).trim(),
-        ...safeObservationParse(raw, 'Visionモデルの返答がJSONではありませんでした')
+        ...safeObservationParse(raw, "Visionモデルの返答がJSONではありませんでした"),
       };
     } catch (err) {
       console.warn(`cloud vision batch failed; trying single-frame cloud vision: ${err.message}`);
@@ -310,100 +372,120 @@ ${JSON.stringify(compactEvents)}`;
       try {
         const data = await this.#chatCompletions({
           model: this.cloudVisionModel,
-          messages: [{
-            role: 'user',
-            content: [
-              { type: 'text', text: observationPrompt(petName) },
-              { type: 'image_url', image_url: { url: `data:image/jpeg;base64,${image}` } }
-            ]
-          }],
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", text: observationPrompt(petName) },
+                { type: "image_url", image_url: { url: `data:image/jpeg;base64,${image}` } },
+              ],
+            },
+          ],
           temperature: 0.1,
-          max_tokens: 800
+          max_tokens: 800,
         });
 
-        const raw = data.choices?.[0]?.message?.content || '';
-        return { index, raw: String(raw).trim(), parsed: safeObservationParse(raw, 'Visionモデルの返答がJSONではありませんでした') };
+        const raw = data.choices?.[0]?.message?.content || "";
+        return {
+          index,
+          raw: String(raw).trim(),
+          parsed: safeObservationParse(raw, "Visionモデルの返答がJSONではありませんでした"),
+        };
       } catch (err) {
-        return { index, raw: '', parsed: { petVisible: null, scene: '解析失敗', petActivity: '不明', concerns: [`frame ${index + 1}: ${err.message}`], ownerChecks: [] } };
+        return {
+          index,
+          raw: "",
+          parsed: {
+            petVisible: null,
+            scene: "解析失敗",
+            petActivity: "不明",
+            concerns: [`frame ${index + 1}: ${err.message}`],
+            ownerChecks: [],
+          },
+        };
       }
     });
 
-    const successful = observations.filter(item => item.raw);
+    const successful = observations.filter((item) => item.raw);
     if (!successful.length) {
       console.warn(`cloud vision single-frame failed; falling back to local ollama: ${originalError.message}`);
       return null;
     }
 
-    const petVisible = observations.some(item => item.parsed.petVisible === true)
+    const petVisible = observations.some((item) => item.parsed.petVisible === true)
       ? true
-      : observations.every(item => item.parsed.petVisible === false)
+      : observations.every((item) => item.parsed.petVisible === false)
         ? false
         : null;
 
     return {
       enabled: true,
-      provider: 'ollama-cloud-single-frame',
+      provider: "ollama-cloud-single-frame",
       model: this.cloudVisionModel,
       framesAnalyzed: successful.length,
       petVisible,
-      scene: observations.map(item => `frame ${item.index + 1}: ${item.parsed.scene || item.raw}`).join(' / '),
-      petActivity: observations.map(item => item.parsed.petActivity).filter(Boolean).join(' / ') || '不明',
-      concerns: observations.flatMap(item => item.parsed.concerns || []).slice(0, 6),
-      ownerChecks: observations.flatMap(item => item.parsed.ownerChecks || []).slice(0, 6),
-      frameObservations: observations.map(item => ({ index: item.index, ...item.parsed, raw: item.raw })),
-      raw: observations.map(item => `frame ${item.index + 1}: ${item.raw || '解析失敗'}`).join('\n')
+      scene: observations.map((item) => `frame ${item.index + 1}: ${item.parsed.scene || item.raw}`).join(" / "),
+      petActivity:
+        observations
+          .map((item) => item.parsed.petActivity)
+          .filter(Boolean)
+          .join(" / ") || "不明",
+      concerns: observations.flatMap((item) => item.parsed.concerns || []).slice(0, 6),
+      ownerChecks: observations.flatMap((item) => item.parsed.ownerChecks || []).slice(0, 6),
+      frameObservations: observations.map((item) => ({ index: item.index, ...item.parsed, raw: item.raw })),
+      raw: observations.map((item) => `frame ${item.index + 1}: ${item.raw || "解析失敗"}`).join("\n"),
     };
   }
 
   async #localVision(images, petName) {
     try {
       const response = await fetch(`${this.localUrl}/api/generate`, {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
+        method: "POST",
+        headers: { "content-type": "application/json" },
         body: JSON.stringify({
           model: this.localVisionModel,
           prompt: observationPrompt(petName),
           images,
           stream: false,
-          options: { temperature: 0.2 }
+          options: { temperature: 0.2 },
         }),
-        signal: AbortSignal.timeout(120000)
+        signal: AbortSignal.timeout(120000),
       });
 
       if (!response.ok) throw new Error(`Ollama HTTP ${response.status}`);
       const data = await response.json();
-      const raw = data.response || '';
+      const raw = data.response || "";
       return {
         enabled: true,
-        provider: 'local-ollama',
+        provider: "local-ollama",
         model: this.localVisionModel,
         framesAnalyzed: images.length,
         raw: String(raw).trim(),
-        ...safeObservationParse(raw, 'Ollamaの返答がJSONではありませんでした')
+        ...safeObservationParse(raw, "Ollamaの返答がJSONではありませんでした"),
       };
     } catch (err) {
       return {
         enabled: false,
         model: this.localVisionModel,
-        summary: `Ollama解析に失敗: ${err.message}`
+        summary: `Ollama解析に失敗: ${err.message}`,
       };
     }
   }
 
-  async #chatCompletions(payload) {
+  async #chatCompletions(payload: Record<string, any>) {
     const maxAttempts = 3;
-    let lastError;
+    let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
       try {
         const response = await fetch(`${this.cloudUrl}/chat/completions`, {
-          method: 'POST',
+          method: "POST",
           headers: {
-            'content-type': 'application/json',
-            authorization: `Bearer ${this.apiKey}`
+            "content-type": "application/json",
+            authorization: `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify({ ...payload, stream: false }),
-          signal: AbortSignal.timeout(120000)
+          signal: AbortSignal.timeout(120000),
         });
 
         if (response.ok) return response.json();
@@ -423,39 +505,50 @@ ${JSON.stringify(compactEvents)}`;
 }
 
 function isCompleteReportMarkdown(markdown) {
-  const text = String(markdown || '').trim();
+  const text = String(markdown || "").trim();
   if (!text) return false;
-  const requiredHeadings = ['# 今日の様子', '# 気になる点', '# 明日見ること'];
-  if (!requiredHeadings.every(heading => text.includes(heading))) return false;
+  const requiredHeadings = ["# 今日の様子", "# 気になる点", "# 明日見ること"];
+  if (!requiredHeadings.every((heading) => text.includes(heading))) return false;
 
-  const lastLine = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean).at(-1) || '';
+  const lastLine =
+    text
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .at(-1) || "";
   if (!lastLine) return false;
   if (/[,、・:：へにをがのとで]$/.test(lastLine)) return false;
-  if (lastLine.startsWith('- ') && !/[。.!！?？）)]$/.test(lastLine)) return false;
+  if (lastLine.startsWith("- ") && !/[。.!！?？）)]$/.test(lastLine)) return false;
   return true;
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function createFallbackTimeline(events, petName = 'ペット') {
-  const visible = events
-    .filter(event => event.notify || event.ai?.petVisible === true || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(event.activityCategory || event.ai?.activityCategory));
-  const groups = [];
+function createFallbackTimeline(events: DiaryEvent[], petName = "ペット") {
+  const visible = events.filter(
+    (event) =>
+      event.notify ||
+      event.ai?.petVisible === true ||
+      ["sleep", "eat", "drink", "toilet", "play", "mischief", "near_owner", "moving", "rest"].includes(
+        event.activityCategory || event.ai?.activityCategory,
+      ),
+  );
+  const groups: TimelineGroup[] = [];
 
   for (const event of visible) {
     const previous = groups.at(-1);
-    const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+    const category = event.activityCategory || event.ai?.activityCategory || "unknown";
     if (previous && shouldMergeFallbackTimelineEvents(previous, event, category)) {
       previous.events.push(event);
       previous.endTime = event.time;
       if (isDailyLifeCategory(previous.category) && isDailyLifeCategory(category)) {
-        previous.category = 'rest';
-        previous.label = '過ごしている';
+        previous.category = "rest";
+        previous.label = "過ごしている";
       }
       previous.title = fallbackGroupTitle(previous.events, petName);
-      previous.detail = event.ai?.scene || previous.detail || '';
+      previous.detail = event.ai?.scene || previous.detail || "";
       continue;
     }
 
@@ -465,18 +558,21 @@ function createFallbackTimeline(events, petName = 'ペット') {
       category,
       label: event.activityLabel || event.ai?.activityLabel || categoryToLabel(category),
       title: naturalTimelineTitle(event, petName),
-      detail: event.ai?.scene || '',
-      importance: event.notify ? 'high' : 'normal',
+      detail: event.ai?.scene || "",
+      importance: event.notify ? "high" : "normal",
       notify: Boolean(event.notify),
-      events: [event]
+      events: [event],
     });
   }
 
-  return bucketTimelineItems(groups.map(({ events: _events, ...item }) => item), petName);
+  return bucketTimelineItems(
+    groups.map(({ events: _events, ...item }) => item),
+    petName,
+  );
 }
 
-function bucketTimelineItems(items, petName = 'ペット') {
-  const buckets = new Map();
+function bucketTimelineItems(items: TimelineItem[], petName = "ペット") {
+  const buckets = new Map<string, TimelineItem[]>();
   for (const item of items) {
     const key = tenMinuteBucketKey(item.startTime || item.time);
     const bucket = buckets.get(key) || [];
@@ -490,35 +586,56 @@ function bucketTimelineItems(items, petName = 'ペット') {
 function summarizeTimelineBucket(key, items, petName) {
   if (items.length === 1) return items[0];
   const sorted = [...items].sort((a, b) => String(a.startTime || a.time).localeCompare(String(b.startTime || b.time)));
-  const important = sorted.find(item => item.notify || item.category === 'mischief' || item.activityCategory === 'mischief');
+  const important = sorted.find(
+    (item) => item.notify || item.category === "mischief" || item.activityCategory === "mischief",
+  );
   const latest = sorted.at(-1);
-  const places = [...new Set(sorted.map(item => placeFromScene(`${item.detail || ''} ${item.title || item.timelineText || ''}`)).filter(Boolean))].slice(0, 2);
-  const labels = [...new Set(sorted.map(item => item.label || item.activityLabel || categoryToLabel(item.category || item.activityCategory)).filter(label => label && label !== '記録'))].slice(0, 2);
+  const places = [
+    ...new Set(
+      sorted
+        .map((item) => placeFromScene(`${item.detail || ""} ${item.title || item.timelineText || ""}`))
+        .filter(Boolean),
+    ),
+  ].slice(0, 2);
+  const labels = [
+    ...new Set(
+      sorted
+        .map((item) => item.label || item.activityLabel || categoryToLabel(item.category || item.activityCategory))
+        .filter((label) => label && label !== "記録"),
+    ),
+  ].slice(0, 2);
 
   const title = important
-    ? String(important.title || important.timelineText || `${petName}の気になる動きがありました。`).replace(/^[^:：]+[:：]\s*/, '')
+    ? String(important.title || important.timelineText || `${petName}の気になる動きがありました。`).replace(
+        /^[^:：]+[:：]\s*/,
+        "",
+      )
     : places.length
-      ? `${petName}は${places.join('や')}でしばらく過ごしていました。`
+      ? `${petName}は${places.join("や")}でしばらく過ごしていました。`
       : `${petName}はしばらく過ごしていました。`;
 
   return {
     ...latest,
     startTime: sorted[0].startTime || sorted[0].time || key,
     endTime: latest.endTime || latest.time || latest.startTime || key,
-    category: important ? (important.category || important.activityCategory || 'mischief') : (latest.category || latest.activityCategory || 'rest'),
-    label: important ? (important.label || important.activityLabel || '気になる動き') : (labels[0] || '今日の様子'),
+    category: important
+      ? important.category || important.activityCategory || "mischief"
+      : latest.category || latest.activityCategory || "rest",
+    label: important ? important.label || important.activityLabel || "気になる動き" : labels[0] || "今日の様子",
     title,
-    detail: places.length ? `${places.join('、')}での様子です。` : String(latest.detail || '').replace(/^[^:：]+[:：]\s*/, ''),
-    importance: important ? 'high' : 'normal',
-    notify: Boolean(important?.notify)
+    detail: places.length
+      ? `${places.join("、")}での様子です。`
+      : String(latest.detail || "").replace(/^[^:：]+[:：]\s*/, ""),
+    importance: important ? "high" : "normal",
+    notify: Boolean(important?.notify),
   };
 }
 
 function tenMinuteBucketKey(time) {
-  const value = String(time || '');
+  const value = String(time || "");
   const match = value.match(/^(\d{4}-\d{2}-\d{2})T(\d{2})[-:](\d{2})/);
   if (!match) return value;
-  const minute = String(Math.floor(Number(match[3]) / 10) * 10).padStart(2, '0');
+  const minute = String(Math.floor(Number(match[3]) / 10) * 10).padStart(2, "0");
   return `${match[1]}T${match[2]}-${minute}-00`;
 }
 
@@ -526,98 +643,121 @@ function shouldMergeFallbackTimelineEvents(previous, event, category) {
   const last = previous.events.at(-1);
   if (!last) return false;
   const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(previous.endTime)) / 60000;
-  const previousPlace = placeFromScene(previous.detail || previous.title || '');
-  const eventPlace = placeFromScene(event.ai?.scene || event.timelineText || '');
+  const previousPlace = placeFromScene(previous.detail || previous.title || "");
+  const eventPlace = placeFromScene(event.ai?.scene || event.timelineText || "");
   const samePlace = !previousPlace || !eventPlace || previousPlace === eventPlace;
   if (minutes <= 6 && samePlace && !isQuietVisibleFlip(previous.category, category)) return true;
 
-  const sameCategory = previous.category === category || (isDailyLifeCategory(previous.category) && isDailyLifeCategory(category));
+  const sameCategory =
+    previous.category === category || (isDailyLifeCategory(previous.category) && isDailyLifeCategory(category));
   if (!sameCategory) return false;
 
   if (!samePlace) return false;
   if (previous.notify || event.notify) return minutes <= 20;
   if (isDailyLifeCategory(category)) return minutes <= 90;
-  if (['not_visible', 'unknown'].includes(category)) return minutes <= 45;
+  if (["not_visible", "unknown"].includes(category)) return minutes <= 45;
   return minutes <= 25;
 }
 
 function isDailyLifeCategory(category) {
-  return ['sleep', 'rest', 'moving', 'near_owner', 'play'].includes(category);
+  return ["sleep", "rest", "moving", "near_owner", "play"].includes(category);
 }
 
 function isQuietVisibleFlip(aCategory, bCategory) {
-  const aQuiet = ['not_visible', 'unknown'].includes(aCategory);
-  const bQuiet = ['not_visible', 'unknown'].includes(bCategory);
+  const aQuiet = ["not_visible", "unknown"].includes(aCategory);
+  const bQuiet = ["not_visible", "unknown"].includes(bCategory);
   return aQuiet !== bQuiet;
 }
 
 function naturalTimelineTitle(event, petName) {
-  const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
   if (event.notificationText) return event.notificationText;
-  if (event.ai?.petActivity && event.ai.petActivity !== '不明') return event.ai.petActivity.replaceAll('ペット', petName);
-  if (event.timelineText && !event.timelineText.includes('写真を保存しました')) return event.timelineText.replace(/^[^:：]+[:：]\s*/, '').replaceAll('ペット', petName);
-  if (event.ai?.scene) return event.ai.scene.replaceAll('ペット', petName);
+  if (event.ai?.petActivity && event.ai.petActivity !== "不明")
+    return event.ai.petActivity.replaceAll("ペット", petName);
+  if (event.timelineText && !event.timelineText.includes("写真を保存しました"))
+    return event.timelineText.replace(/^[^:：]+[:：]\s*/, "").replaceAll("ペット", petName);
+  if (event.ai?.scene) return event.ai.scene.replaceAll("ペット", petName);
   return `${petName}の様子を記録しました。`;
 }
 
 function fallbackGroupTitle(events, petName) {
   const latest = events.at(-1);
-  const category = latest.activityCategory || latest.ai?.activityCategory || 'unknown';
+  const category = latest.activityCategory || latest.ai?.activityCategory || "unknown";
   const label = latest.activityLabel || latest.ai?.activityLabel || categoryToLabel(category);
-  const place = placeFromScene(latest.ai?.scene || latest.timelineText || '');
-  if (['sleep', 'rest', 'moving'].includes(category)) return place ? `${petName}は${place}でしばらく過ごしていました。` : `${petName}はしばらく過ごしていました。`;
-  if (category === 'not_visible') return `しばらく${petName}の姿が確認しづらい状態でした。`;
-  if (label === '記録') return naturalTimelineTitle(latest, petName);
+  const place = placeFromScene(latest.ai?.scene || latest.timelineText || "");
+  if (["sleep", "rest", "moving"].includes(category))
+    return place ? `${petName}は${place}でしばらく過ごしていました。` : `${petName}はしばらく過ごしていました。`;
+  if (category === "not_visible") return `しばらく${petName}の姿が確認しづらい状態でした。`;
+  if (label === "記録") return naturalTimelineTitle(latest, petName);
   return `${label}: ${naturalTimelineTitle(latest, petName)}`;
 }
 
 function placeFromScene(text) {
-  const value = String(text || '');
-  if (value.includes('ケージ')) return 'ケージの中';
-  if (value.includes('テーブルの下')) return 'テーブルの下';
-  if (value.includes('椅子')) return '椅子の上';
-  if (value.includes('床')) return '床の上';
-  if (value.includes('クッション')) return 'クッションのあたり';
-  if (value.includes('キャリー')) return 'キャリーケースのあたり';
-  return '';
+  const value = String(text || "");
+  if (value.includes("ケージ")) return "ケージの中";
+  if (value.includes("テーブルの下")) return "テーブルの下";
+  if (value.includes("椅子")) return "椅子の上";
+  if (value.includes("床")) return "床の上";
+  if (value.includes("クッション")) return "クッションのあたり";
+  if (value.includes("キャリー")) return "キャリーケースのあたり";
+  return "";
 }
 
 function categoryToLabel(category) {
-  return ({ sleep: 'お昼寝中', eat: 'ご飯中', drink: '水飲み', toilet: 'トイレ', play: '遊んでいる', mischief: 'イタズラかも', near_owner: '人の近く', moving: '移動中', rest: 'くつろぎ中', not_visible: '見えない', unknown: '記録' })[category] || '記録';
+  return (
+    {
+      sleep: "お昼寝中",
+      eat: "ご飯中",
+      drink: "水飲み",
+      toilet: "トイレ",
+      play: "遊んでいる",
+      mischief: "イタズラかも",
+      near_owner: "人の近く",
+      moving: "移動中",
+      rest: "くつろぎ中",
+      not_visible: "見えない",
+      unknown: "記録",
+    }[category] || "記録"
+  );
 }
 
 function normalizeTimelineItems(items, events) {
   if (!Array.isArray(items)) return [];
-  const eventTimes = new Set(events.map(event => event.time));
-  return items.slice(0, 40).map(item => {
-    const startTime = eventTimes.has(item.startTime) ? item.startTime : nearestEventTime(item.startTime, events);
-    const endTime = eventTimes.has(item.endTime) ? item.endTime : startTime;
-    return {
-      startTime,
-      endTime,
-      time: endTime || startTime,
-      activityCategory: String(item.category || 'unknown'),
-      activityLabel: String(item.label || '記録'),
-      timelineText: String(item.title || '').trim(),
-      detail: String(item.detail || '').trim(),
-      importance: ['low', 'normal', 'high'].includes(item.importance) ? item.importance : 'normal',
-      notify: Boolean(item.notify)
-    };
-  }).filter(item => item.startTime && item.timelineText);
+  const eventTimes = new Set(events.map((event) => event.time));
+  return items
+    .slice(0, 40)
+    .map((item) => {
+      const startTime = eventTimes.has(item.startTime) ? item.startTime : nearestEventTime(item.startTime, events);
+      const endTime = eventTimes.has(item.endTime) ? item.endTime : startTime;
+      return {
+        startTime,
+        endTime,
+        time: endTime || startTime,
+        activityCategory: String(item.category || "unknown"),
+        activityLabel: String(item.label || "記録"),
+        timelineText: String(item.title || "").trim(),
+        detail: String(item.detail || "").trim(),
+        importance: ["low", "normal", "high"].includes(item.importance) ? item.importance : "normal",
+        notify: Boolean(item.notify),
+      };
+    })
+    .filter((item) => item.startTime && item.timelineText);
 }
 
 function nearestEventTime(time, events) {
-  if (!events.length) return '';
+  if (!events.length) return "";
   if (!time) return events.at(-1).time;
   const target = parseEventTime(time);
-  return events.reduce((best, event) => {
-    const diff = Math.abs(parseEventTime(event.time) - target);
-    return diff < best.diff ? { time: event.time, diff } : best;
-  }, { time: events.at(-1).time, diff: Infinity }).time;
+  return events.reduce(
+    (best, event) => {
+      const diff = Math.abs(parseEventTime(event.time) - target);
+      return diff < best.diff ? { time: event.time, diff } : best;
+    },
+    { time: events.at(-1).time, diff: Infinity },
+  ).time;
 }
 
 function parseEventTime(time) {
-  const normalized = String(time || '').replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3');
+  const normalized = String(time || "").replace(/T(\d{2})-(\d{2})-(\d{2})$/, "T$1:$2:$3");
   const parsed = Date.parse(normalized);
   return Number.isFinite(parsed) ? parsed : 0;
 }
