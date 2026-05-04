@@ -9,6 +9,8 @@ loadDotEnv(path.join(rootDir, '.env'));
 export const config = {
   rootDir,
   port: Number(process.env.PORT || 8787),
+  marketingOrigin: process.env.PUBLIC_MARKETING_ORIGIN || 'https://pochimo.com',
+  appOrigin: process.env.PUBLIC_APP_ORIGIN || 'https://diary.pochimo.com',
   dataDir: path.join(rootDir, 'data'),
   publicDir: path.join(rootDir, 'public'),
   ollama: {

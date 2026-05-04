@@ -484,6 +484,14 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   font-size: 13px;
   font-weight: 700;
 }
+.lp-brand {
+  margin: 0 0 10px;
+  color: var(--accent-foreground);
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
 .lp-hero h1 {
   max-width: 820px;
   margin: 0;

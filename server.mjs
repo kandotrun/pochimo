@@ -53,6 +53,10 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await abService.recordConversion(body.variant));
     }
 
+    if (req.method === 'GET' && isMarketingHome(req, url.pathname)) {
+      return serveLp({ req, res });
+    }
+
     if (req.method === 'GET' && (url.pathname === '/lp' || url.pathname === '/lp.html')) {
       return serveLp({ req, res });
     }
@@ -158,7 +162,9 @@ async function serveLp({ req, res }) {
   html = html
     .replaceAll('__AB_VARIANT__', variant.id)
     .replaceAll('__AB_IMAGE__', variant.image)
-    .replaceAll('__OG_IMAGE__', variant.ogImage);
+    .replaceAll('__OG_IMAGE__', variant.ogImage)
+    .replaceAll('__MARKETING_ORIGIN__', config.marketingOrigin)
+    .replaceAll('__APP_ORIGIN__', config.appOrigin);
   const headers = { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' };
   if (shouldSetCookie) headers['set-cookie'] = `ab_lp_visual=${variant.id}; Path=/; Max-Age=${60 * 60 * 24 * 90}; SameSite=Lax`;
   res.writeHead(200, headers);
@@ -237,6 +243,13 @@ function isProfileSetupPath(pathname) {
     || pathname === '/api/profile'
     || pathname === '/api/auth/state'
     || pathname === '/api/auth/logout';
+}
+
+function isMarketingHome(req, pathname) {
+  if (pathname !== '/') return false;
+  const host = String(req.headers.host || '').split(':')[0].toLowerCase();
+  const marketingHost = new URL(config.marketingOrigin).hostname.toLowerCase();
+  return host === marketingHost;
 }
 
 function isPublicPath(pathname) {
