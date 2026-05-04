@@ -129,7 +129,7 @@ ${fallbackMarkdown}`;
       return { enabled: false, model: this.cloudReportModel, items: fallback, summary: 'API keyなし、またはイベントなし' };
     }
 
-    const compactEvents = selectTimelineSourceEvents(events, 160).map(event => ({
+    const compactEvents = events.map(event => ({
       time: event.time,
       activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
       activityLabel: event.activityLabel || event.ai?.activityLabel || '',
@@ -152,7 +152,8 @@ ${fallbackMarkdown}`;
 - 「ただ暗い」「見えない」「同じ場所で静止」は重要でない限り省く
 - イタズラ/危険/通知対象は必ず残す
 - 休憩や睡眠はまとまった変化として残す
-- 最大12件。多すぎるなら大胆に省略
+- 全体を見たうえで、同じ状態だけをまとめる。代表サンプリングで時間帯を捨てない
+- 最大40件。多すぎる場合も時間帯を飛ばさず、近い記録をまとめる
 - 必ずJSONだけ返す
 
 形式:
@@ -373,42 +374,7 @@ function createFallbackTimeline(events, petName = 'ペット') {
     });
   }
 
-  return selectRepresentativeGroups(groups, 12).map(({ events: _events, ...item }) => item);
-}
-
-function selectTimelineSourceEvents(events, maxItems) {
-  const meaningful = events.filter(event => {
-    const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
-    return event.notify
-      || event.ai?.petVisible === true
-      || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(category);
-  });
-  if (meaningful.length <= maxItems) return meaningful;
-
-  const required = meaningful.filter(event => event.notify || ['mischief', 'eat', 'drink', 'toilet', 'play'].includes(event.activityCategory || event.ai?.activityCategory));
-  const rest = meaningful.filter(event => !required.includes(event));
-  return [...required, ...sampleEvenly(rest, Math.max(0, maxItems - required.length))]
-    .sort((a, b) => String(a.time).localeCompare(String(b.time)))
-    .slice(0, maxItems);
-}
-
-function selectRepresentativeGroups(groups, maxItems) {
-  if (groups.length <= maxItems) return groups;
-  const required = groups.filter(group => group.notify || ['mischief', 'eat', 'drink', 'toilet', 'play'].includes(group.category));
-  const rest = groups.filter(group => !required.includes(group));
-  return [...required, ...sampleEvenly(rest, Math.max(0, maxItems - required.length))]
-    .sort((a, b) => String(a.startTime).localeCompare(String(b.startTime)))
-    .slice(0, maxItems);
-}
-
-function sampleEvenly(items, maxItems) {
-  if (maxItems <= 0) return [];
-  if (items.length <= maxItems) return items;
-  if (maxItems === 1) return [items[Math.floor(items.length / 2)]];
-  return Array.from({ length: maxItems }, (_, index) => {
-    const itemIndex = Math.round(index * (items.length - 1) / (maxItems - 1));
-    return items[itemIndex];
-  });
+  return groups.map(({ events: _events, ...item }) => item);
 }
 
 function naturalTimelineTitle(event, petName) {
@@ -445,7 +411,7 @@ function categoryToLabel(category) {
 function normalizeTimelineItems(items, events) {
   if (!Array.isArray(items)) return [];
   const eventTimes = new Set(events.map(event => event.time));
-  return items.slice(0, 16).map(item => {
+  return items.slice(0, 80).map(item => {
     const startTime = eventTimes.has(item.startTime) ? item.startTime : nearestEventTime(item.startTime, events);
     const endTime = eventTimes.has(item.endTime) ? item.endTime : startTime;
     return {

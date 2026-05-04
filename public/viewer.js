@@ -268,8 +268,8 @@ function renderTimeline(events, options = {}) {
   }
 
   const shown = options.edited
-    ? events.slice(0, 40)
-    : selectRepresentativeTimelineItems(groupTimelineEvents(events.filter(shouldShowTimelineEvent)), 12);
+    ? events.slice(0, 120)
+    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(0, 120);
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -339,25 +339,6 @@ function groupTimelineEvents(events) {
   }
 
   return groups;
-}
-
-function selectRepresentativeTimelineItems(items, maxItems) {
-  if (items.length <= maxItems) return items;
-  const required = items.filter(item => item.notify || ['mischief', 'eat', 'drink', 'toilet', 'play'].includes(item.activityCategory));
-  const rest = items.filter(item => !required.includes(item));
-  return [...required, ...sampleEvenly(rest, Math.max(0, maxItems - required.length))]
-    .sort((a, b) => String(a.startTime || a.time).localeCompare(String(b.startTime || b.time)))
-    .slice(0, maxItems);
-}
-
-function sampleEvenly(items, maxItems) {
-  if (maxItems <= 0) return [];
-  if (items.length <= maxItems) return items;
-  if (maxItems === 1) return [items[Math.floor(items.length / 2)]];
-  return Array.from({ length: maxItems }, (_, index) => {
-    const itemIndex = Math.round(index * (items.length - 1) / (maxItems - 1));
-    return items[itemIndex];
-  });
 }
 
 function shouldMergeTimelineEvents(group, event) {
