@@ -5,7 +5,9 @@ const MIME_TYPES = new Map([
   ['.html', 'text/html'],
   ['.js', 'text/javascript'],
   ['.css', 'text/css'],
-  ['.png', 'image/png']
+  ['.png', 'image/png'],
+  ['.jpg', 'image/jpeg'],
+  ['.jpeg', 'image/jpeg']
 ]);
 
 export async function serveStatic({ publicDir, pathname, res }) {
