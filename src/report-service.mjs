@@ -151,7 +151,38 @@ export class ReportService {
 }
 
 function pickRepresentativeEvents(events) {
-  return events;
+  const withFiles = events.filter(event => event.file);
+  if (withFiles.length <= 12) return withFiles;
+
+  const scored = withFiles.map((event, index) => ({ event, index, score: reportPhotoScore(event) }))
+    .sort((a, b) => b.score - a.score || b.index - a.index);
+  const picked = [];
+  const seen = new Set();
+
+  for (const item of scored) {
+    if (picked.length >= 8) break;
+    picked.push(item.event);
+    seen.add(item.event.file);
+  }
+
+  for (const event of withFiles.slice(-8).reverse()) {
+    if (picked.length >= 12) break;
+    if (seen.has(event.file)) continue;
+    picked.push(event);
+    seen.add(event.file);
+  }
+
+  return picked.sort((a, b) => String(a.time).localeCompare(String(b.time)));
+}
+
+function reportPhotoScore(event) {
+  let score = Number(event.motionScore || 0);
+  if (event.ai?.petVisible === true) score += 30;
+  if (event.activityCategory && event.activityCategory !== 'not_visible' && event.activityCategory !== 'unknown') score += 12;
+  if (event.activityCategory === 'mischief') score += 40;
+  if (event.notify) score += 24;
+  if (event.timelineText) score += 8;
+  return score;
 }
 
 function renderAiSection(ai) {

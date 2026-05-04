@@ -527,8 +527,10 @@ function redirect(res, location) {
 
 function startDailyReportScheduler() {
   let lastRunDate = '';
+  let running = false;
 
   const tick = async () => {
+    if (running) return;
     const now = new Date();
     const parts = new Intl.DateTimeFormat('sv-SE', {
       timeZone: 'Asia/Tokyo',
@@ -546,9 +548,12 @@ function startDailyReportScheduler() {
 
     const shouldRun = Number(hour) > 22 || (hour === '22' && Number(minute) >= 0);
     if (!shouldRun || lastRunDate === date) return;
+    running = true;
     const ok = await createReportsForAllUsers(date).then(() => true).catch(err => {
       console.warn(`daily report failed: ${err.message}`);
       return false;
+    }).finally(() => {
+      running = false;
     });
     if (ok) lastRunDate = date;
   };
