@@ -238,7 +238,7 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   height: auto;
   max-height: 58vh;
   object-fit: contain;
-  filter: brightness(1.75) contrast(1.12) saturate(1.08);
+  filter: brightness(var(--photo-brightness, 1)) contrast(var(--photo-contrast, 1)) saturate(var(--photo-saturate, 1));
 }
 .latest-overlay {
   position: absolute;

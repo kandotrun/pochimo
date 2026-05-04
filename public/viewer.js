@@ -13,6 +13,8 @@ const latestOverlay = document.getElementById('latestOverlay');
 const latestEmpty = document.getElementById('latestEmpty');
 const latestMeta = document.getElementById('latestMeta');
 
+latestImage.addEventListener('load', () => applyAdaptivePhotoEnhancement(latestImage));
+
 let latestEvents = [];
 let petProfile = {};
 let selectedDate = todayString();
@@ -55,6 +57,7 @@ async function refreshLatest() {
   const json = await fetch(`/api/latest?date=${encodeURIComponent(selectedDate)}`).then(res => res.json());
   if (!json.imageUrl || !json.event) {
     latestImage.hidden = true;
+    resetPhotoEnhancement(latestImage);
     latestOverlay.hidden = true;
     latestOverlay.innerHTML = '';
     latestEmpty.hidden = false;
@@ -67,6 +70,62 @@ async function refreshLatest() {
   latestEmpty.hidden = true;
   latestMeta.textContent = `${formatEventTime(json.event.time)} に撮影`;
   renderLatestDetection(json.event);
+}
+
+function applyAdaptivePhotoEnhancement(img) {
+  const brightness = estimateImageBrightness(img);
+  if (brightness == null) {
+    resetPhotoEnhancement(img);
+    return;
+  }
+
+  const target = brightness < 0.16 ? 0.58 : brightness < 0.28 ? 0.54 : 0.48;
+  const boost = clamp(target / Math.max(brightness, 0.05), 1, 3.8);
+  const contrast = clamp(1.04 + (boost - 1) * 0.14, 1, 1.38);
+  const saturate = clamp(1.02 + (boost - 1) * 0.08, 1, 1.24);
+
+  img.style.setProperty('--photo-brightness', boost.toFixed(2));
+  img.style.setProperty('--photo-contrast', contrast.toFixed(2));
+  img.style.setProperty('--photo-saturate', saturate.toFixed(2));
+}
+
+function estimateImageBrightness(img) {
+  if (!img.naturalWidth || !img.naturalHeight) return null;
+
+  const canvas = document.createElement('canvas');
+  const size = 48;
+  canvas.width = size;
+  canvas.height = size;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+
+  try {
+    ctx.drawImage(img, 0, 0, size, size);
+    const { data } = ctx.getImageData(0, 0, size, size);
+    const values = [];
+    for (let i = 0; i < data.length; i += 4) {
+      const alpha = data[i + 3] / 255;
+      if (alpha < 0.5) continue;
+      const r = data[i] / 255;
+      const g = data[i + 1] / 255;
+      const b = data[i + 2] / 255;
+      values.push(0.2126 * r + 0.7152 * g + 0.0722 * b);
+    }
+    if (!values.length) return null;
+    values.sort((a, b) => a - b);
+    const start = Math.floor(values.length * 0.08);
+    const end = Math.ceil(values.length * 0.82);
+    const sample = values.slice(start, end);
+    return sample.reduce((sum, value) => sum + value, 0) / sample.length;
+  } catch {
+    return null;
+  }
+}
+
+function resetPhotoEnhancement(img) {
+  img.style.removeProperty('--photo-brightness');
+  img.style.removeProperty('--photo-contrast');
+  img.style.removeProperty('--photo-saturate');
 }
 
 function renderLatestDetection(event) {
@@ -104,6 +163,10 @@ function normalizePetBox(box) {
 function clamp01(value) {
   if (!Number.isFinite(value)) return NaN;
   return Math.max(0, Math.min(1, value));
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
 
 async function loadPetProfile() {
