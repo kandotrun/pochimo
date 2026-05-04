@@ -532,9 +532,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 .lp-preview {
   max-width: 920px;
   margin: -8px auto 56px;
-  padding: 22px;
-  background: var(--brand-soft);
-  border-color: var(--brand-border);
+  padding: 0;
+  background: transparent;
+  border: 0;
   overflow: hidden;
 }
 .lp-preview-copy { text-align: center; margin-bottom: 18px; }
