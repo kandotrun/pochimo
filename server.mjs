@@ -146,6 +146,14 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, await frameService.listEvents(date, user.id, user.householdId));
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/timeline') {
+      const date = url.searchParams.get('date') || todayJst();
+      const events = await frameService.listEvents(date, user.id, user.householdId);
+      const profile = authService.getPetProfile(user.id, user.householdId);
+      const timeline = await aiClient.createTimeline({ events, petName: profile.name || 'ペット' });
+      return sendJson(res, 200, { ok: true, ...timeline });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/latest') {
       const date = url.searchParams.get('date') || todayJst();
       const events = await frameService.listEvents(date, user.id, user.householdId);

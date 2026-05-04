@@ -47,9 +47,12 @@ function renderSkeletons() {
 }
 
 async function refreshTimeline() {
-  const res = await fetch(`/api/events?date=${encodeURIComponent(selectedDate)}`);
-  latestEvents = await res.json();
-  renderTimeline(latestEvents);
+  const [events, timeline] = await Promise.all([
+    fetch(`/api/events?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()),
+    fetch(`/api/timeline?date=${encodeURIComponent(selectedDate)}`).then(res => res.json()).catch(() => null)
+  ]);
+  latestEvents = events;
+  renderTimeline(timeline?.items?.length ? timeline.items : latestEvents, { agentic: Boolean(timeline?.enabled) });
 }
 
 async function refreshLatest() {
@@ -192,20 +195,22 @@ function renderPetProfile() {
   }
 }
 
-function renderTimeline(events, observations = []) {
+function renderTimeline(events, options = {}) {
   if (!events.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ記録がありません。';
     return;
   }
 
-  const shown = groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-40).reverse();
+  const shown = options.agentic
+    ? events.slice(-40).reverse()
+    : groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-40).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
     return;
   }
-  const obsByIndex = new Map(observations.map(item => [item.index, item]));
+  const obsByIndex = new Map();
   timelineEl.className = 'timeline';
   timelineEl.innerHTML = shown.map(event => {
     const originalIndex = events.indexOf(event);
@@ -220,7 +225,7 @@ function renderTimeline(events, observations = []) {
     const pet = observation
       ? observation.petVisible === true ? 'ペットが見えます' : observation.petVisible === false ? 'ペットは見えません' : '確認中'
       : event.aiStatus === 'analyzing' ? '確認中' : '保存しました';
-    const detail = observation?.scene || '写真を保存しました';
+    const detail = event.detail || observation?.scene || '写真を保存しました';
 
     const badge = shouldShowCategoryBadge(category)
       ? `<span class="category-badge">${escapeHtml(category)}</span>`

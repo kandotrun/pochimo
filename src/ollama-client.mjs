@@ -123,6 +123,77 @@ ${fallbackMarkdown}`;
     }
   }
 
+  async createTimeline({ events, petName = 'ペット' }) {
+    const fallback = createFallbackTimeline(events, petName);
+    if (!this.apiKey || !events.length) {
+      return { enabled: false, model: this.cloudReportModel, items: fallback, summary: 'API keyなし、またはイベントなし' };
+    }
+
+    const compactEvents = events.slice(-160).map(event => ({
+      time: event.time,
+      activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
+      activityLabel: event.activityLabel || event.ai?.activityLabel || '',
+      petVisible: event.ai?.petVisible,
+      petActivity: event.ai?.petActivity || '',
+      scene: event.ai?.scene || '',
+      notify: Boolean(event.notify),
+      notificationText: event.notificationText || '',
+      timelineText: event.timelineText || '',
+      motionScore: Number(event.motionScore || 0)
+    }));
+
+    const prompt = `あなたは「ぽちも日報」の編集AIです。以下の検知イベント列から、飼い主に見せる価値があるタイムラインだけを作ってください。
+
+対象のペット名: ${petName}
+
+方針:
+- 監視ログではなく、家族が読める日記にする
+- 同じ状態が数分続いたものは1件にまとめる
+- 「ただ暗い」「見えない」「同じ場所で静止」は重要でない限り省く
+- イタズラ/危険/通知対象は必ず残す
+- 休憩や睡眠はまとまった変化として残す
+- 最大12件。多すぎるなら大胆に省略
+- 必ずJSONだけ返す
+
+形式:
+{
+  "items": [
+    {
+      "startTime": "YYYY-MM-DDTHH-MM-SS",
+      "endTime": "YYYY-MM-DDTHH-MM-SS",
+      "category": "sleep|eat|drink|toilet|play|mischief|near_owner|moving|rest|not_visible|unknown",
+      "label": "短い日本語ラベル",
+      "title": "タイムライン本文。${petName}を主語にした自然な1文",
+      "detail": "補足。不要なら空文字",
+      "importance": "low|normal|high",
+      "notify": true/false
+    }
+  ]
+}
+
+イベントJSON:
+${JSON.stringify(compactEvents)}`;
+
+    try {
+      const data = await this.#chatCompletions({
+        model: this.cloudReportModel,
+        messages: [
+          { role: 'system', content: 'あなたはペットの日報タイムラインを編集するAIです。細かいログを読みやすい日記に圧縮します。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.2,
+        max_tokens: 1800
+      });
+
+      const raw = data.choices?.[0]?.message?.content || '';
+      const parsed = extractJson(raw);
+      const items = normalizeTimelineItems(parsed.items, events);
+      return { enabled: true, model: this.cloudReportModel, items: items.length ? items : fallback, raw: String(raw).trim() };
+    } catch (err) {
+      return { enabled: false, model: this.cloudReportModel, items: fallback, summary: `LLMタイムライン生成に失敗: ${err.message}` };
+    }
+  }
+
   async #tryCloudVision(images, petName) {
     try {
       const content = [
@@ -271,6 +342,58 @@ ${fallbackMarkdown}`;
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function createFallbackTimeline(events, petName = 'ペット') {
+  return events
+    .filter(event => event.notify || event.ai?.petVisible === true || ['sleep', 'eat', 'drink', 'toilet', 'play', 'mischief', 'near_owner', 'moving', 'rest'].includes(event.activityCategory || event.ai?.activityCategory))
+    .slice(-24)
+    .map(event => ({
+      startTime: event.time,
+      endTime: event.time,
+      category: event.activityCategory || event.ai?.activityCategory || 'unknown',
+      label: event.activityLabel || event.ai?.activityLabel || '記録',
+      title: event.timelineText || event.ai?.petActivity || `${petName}の様子を記録しました。`,
+      detail: event.ai?.scene || '',
+      importance: event.notify ? 'high' : 'normal',
+      notify: Boolean(event.notify)
+    }));
+}
+
+function normalizeTimelineItems(items, events) {
+  if (!Array.isArray(items)) return [];
+  const eventTimes = new Set(events.map(event => event.time));
+  return items.slice(0, 16).map(item => {
+    const startTime = eventTimes.has(item.startTime) ? item.startTime : nearestEventTime(item.startTime, events);
+    const endTime = eventTimes.has(item.endTime) ? item.endTime : startTime;
+    return {
+      startTime,
+      endTime,
+      time: endTime || startTime,
+      activityCategory: String(item.category || 'unknown'),
+      activityLabel: String(item.label || '記録'),
+      timelineText: String(item.title || '').trim(),
+      detail: String(item.detail || '').trim(),
+      importance: ['low', 'normal', 'high'].includes(item.importance) ? item.importance : 'normal',
+      notify: Boolean(item.notify)
+    };
+  }).filter(item => item.startTime && item.timelineText);
+}
+
+function nearestEventTime(time, events) {
+  if (!events.length) return '';
+  if (!time) return events.at(-1).time;
+  const target = parseEventTime(time);
+  return events.reduce((best, event) => {
+    const diff = Math.abs(parseEventTime(event.time) - target);
+    return diff < best.diff ? { time: event.time, diff } : best;
+  }, { time: events.at(-1).time, diff: Infinity }).time;
+}
+
+function parseEventTime(time) {
+  const normalized = String(time || '').replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3');
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 async function mapWithConcurrency(items, concurrency, mapper) {
