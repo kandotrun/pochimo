@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>チャット</title>
+  <link rel="stylesheet" href="/style.css?v=20260504-31" />
+</head>
+<body>
+  <main class="app-shell with-tabs chat-shell">
+    <nav class="tab-nav" aria-label="メインナビゲーション">
+      <a class="tab-link" href="/viewer">表示</a>
+      <a class="tab-link active" href="/chat">チャット</a>
+      <a class="tab-link" href="/camera">撮影</a>
+      <a class="tab-link" href="/settings">設定</a>
+    </nav>
+
+    <header class="hero simple-hero">
+      <div>
+        <h1>AIチャット</h1>
+        <p class="lead">今日の記録について、気になることを聞けます。</p>
+      </div>
+    </header>
+
+    <section class="card chat-card">
+      <div id="chatMessages" class="chat-messages" aria-live="polite">
+        <div class="chat-bubble assistant">「夕方どうだった？」「トイレしてた？」「リビングだけ見せて」などと聞いてください。</div>
+      </div>
+      <form id="chatForm" class="chat-form" autocomplete="off">
+        <input id="chatInput" type="text" placeholder="例: 夕方くらい何してた？" />
+        <button id="chatSubmit" class="primary" type="submit">送信</button>
+      </form>
+    </section>
+  </main>
+  <script src="/chat.js?v=20260504-1"></script>
+</body>
+</html>

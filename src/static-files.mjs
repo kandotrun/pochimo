@@ -15,6 +15,7 @@ export async function serveStatic({ publicDir, pathname, res }) {
   const routeMap = new Map([
     ['/', '/index.html'],
     ['/viewer', '/viewer.html'],
+    ['/chat', '/chat.html'],
     ['/camera', '/camera.html'],
     ['/login', '/login.html'],
     ['/settings', '/settings.html'],

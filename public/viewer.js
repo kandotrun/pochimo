@@ -14,9 +14,6 @@ const latestOverlay = document.getElementById('latestOverlay');
 const latestEmpty = document.getElementById('latestEmpty');
 const latestMeta = document.getElementById('latestMeta');
 const timelineModeLabel = document.getElementById('timelineModeLabel');
-const timelineChatForm = document.getElementById('timelineChatForm');
-const timelineChatInput = document.getElementById('timelineChatInput');
-const timelineChatSubmit = document.getElementById('timelineChatSubmit');
 
 latestImage.addEventListener('load', () => applyAdaptivePhotoEnhancement(latestImage));
 latestImage.addEventListener('load', () => {
@@ -658,15 +655,6 @@ dateDisplayBtn.addEventListener('click', () => {
 });
 dateInput.addEventListener('change', event => {
   if (event.target.value) setSelectedDate(event.target.value);
-});
-
-timelineChatForm.addEventListener('submit', async event => {
-  event.preventDefault();
-  const prompt = timelineChatInput.value.trim();
-  if (!prompt) return;
-  timelineChatSubmit.disabled = true;
-  await applyTimelinePrompt(prompt);
-  timelineChatSubmit.disabled = false;
 });
 
 async function refreshReport() {
