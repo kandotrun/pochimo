@@ -29,7 +29,8 @@ export class FrameService {
       userId: Number(userId),
       householdId: Number(householdId),
       motionScore: Number(body.motionScore || 0),
-      cameraLabel: body.cameraLabel || 'browser-camera',
+      cameraId: sanitizeText(body.cameraId, 80) || 'browser-camera',
+      cameraLabel: sanitizeText(body.cameraLabel, 40) || 'カメラ',
       note: body.note || ''
     };
 
@@ -67,4 +68,8 @@ export class FrameService {
     await writeJson(eventsFile, events);
     return events[index];
   }
+}
+
+function sanitizeText(value, maxLength) {
+  return String(value || '').replace(/[\r\n\t]/g, ' ').trim().slice(0, maxLength);
 }

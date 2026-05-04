@@ -4,7 +4,7 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>撮影</title>
-  <link rel="stylesheet" href="/style.css?v=20260504-27" />
+  <link rel="stylesheet" href="/style.css?v=20260504-28" />
 </head>
 <body>
   <main class="app-shell camera-shell with-tabs">
@@ -30,6 +30,9 @@
         </div>
       </div>
 
+      <label class="field camera-name-field">このカメラの場所
+        <input id="cameraLabel" type="text" placeholder="例: リビング / 玄関 / 寝室" autocomplete="off" />
+      </label>
       <div class="control-panel">
         <button id="startBtn" class="primary">撮影開始</button>
         <button id="stopBtn" class="secondary" disabled>停止</button>
@@ -39,6 +42,6 @@
     </section>
 
   </main>
-  <script src="/camera.js?v=20260504-4"></script>
+  <script src="/camera.js?v=20260504-5"></script>
 </body>
 </html>

@@ -4,6 +4,7 @@ const statusEl = document.getElementById('status');
 const burstStatusEl = document.getElementById('burstStatus');
 const startBtn = document.getElementById('startBtn');
 const stopBtn = document.getElementById('stopBtn');
+const cameraLabelInput = document.getElementById('cameraLabel');
 const recordBadge = document.getElementById('recordBadge');
 
 const MOTION_CHECK_MS = 1000;
@@ -18,6 +19,13 @@ let count = 0;
 let nextSaveAt = 0;
 let burstUntil = 0;
 let sending = false;
+let cameraId = localStorage.getItem('pochimoCameraId') || crypto.randomUUID();
+localStorage.setItem('pochimoCameraId', cameraId);
+cameraLabelInput.value = localStorage.getItem('pochimoCameraLabel') || '';
+
+cameraLabelInput.addEventListener('input', () => {
+  localStorage.setItem('pochimoCameraLabel', cameraLabelInput.value.trim());
+});
 
 function setStatus(text) { statusEl.textContent = text; }
 function setBurstStatus(text) { burstStatusEl.textContent = text; }
@@ -85,7 +93,12 @@ function captureFrame() {
   }
   lastSample = new Uint8ClampedArray(data);
 
-  return { image: canvas.toDataURL('image/jpeg', 0.94), motionScore };
+  return {
+    image: canvas.toDataURL('image/jpeg', 0.94),
+    motionScore,
+    cameraId,
+    cameraLabel: cameraLabelInput.value.trim() || 'カメラ'
+  };
 }
 
 async function postFrame(payload) {
@@ -140,7 +153,7 @@ startBtn.addEventListener('click', async () => {
     await captureTick();
     scheduler = setInterval(captureTick, MOTION_CHECK_MS);
     stopBtn.disabled = false;
-    setStatus('記録中です。iPadは画面をつけたままにしてください。');
+    setStatus(`${cameraLabelInput.value.trim() || 'このカメラ'}で記録中です。画面をつけたままにしてください。`);
   } catch (err) {
     startBtn.disabled = false;
     setRecording(false);

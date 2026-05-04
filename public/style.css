@@ -120,6 +120,7 @@ h2 { font-size: 22px; font-weight: 700; }
   box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
 .camera-card { padding: 12px; margin-bottom: 16px; }
+.camera-name-field { margin-top: 12px; }
 .camera-frame {
   position: relative;
   overflow: hidden;
