@@ -48,7 +48,7 @@ body {
   top: max(12px, env(safe-area-inset-top));
   z-index: 20;
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   margin-bottom: 18px;
   padding: 4px;
@@ -62,11 +62,18 @@ body {
   align-items: center;
   justify-content: center;
   min-height: 40px;
+  min-width: 0;
   border-radius: var(--radius);
   color: var(--muted-foreground);
   text-decoration: none;
   font-weight: 700;
   font-size: 14px;
+}
+
+@media (max-width: 390px) {
+  .app-shell { padding-left: 14px; padding-right: 14px; }
+  .tab-nav { gap: 3px; padding: 3px; }
+  .tab-link { min-height: 36px; font-size: 12px; border-radius: 12px; }
 }
 .tab-link.active {
   background: var(--primary);
