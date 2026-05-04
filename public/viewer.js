@@ -199,7 +199,7 @@ function renderTimeline(events, observations = []) {
     return;
   }
 
-  const shown = events.filter(shouldShowTimelineEvent).slice(-80).reverse();
+  const shown = groupTimelineEvents(events.filter(shouldShowTimelineEvent)).slice(-40).reverse();
   if (!shown.length) {
     timelineEl.className = 'timeline empty';
     timelineEl.textContent = 'まだ表示する記録はありません。ペットが写った時や気になる行動だけ表示します。';
@@ -228,7 +228,7 @@ function renderTimeline(events, observations = []) {
 
     return `
       <article class="timeline-item">
-        <time class="timeline-time">${escapeHtml(formatEventTime(event.time))}</time>
+        <time class="timeline-time">${escapeHtml(formatTimelineTime(event))}</time>
         <span class="timeline-dot ${level}"></span>
         <div class="timeline-body">
           <p class="timeline-title">${badge}${escapeHtml(title)}</p>
@@ -236,6 +236,76 @@ function renderTimeline(events, observations = []) {
         </div>
       </article>`;
   }).join('');
+}
+
+function groupTimelineEvents(events) {
+  const sorted = [...events].sort((a, b) => String(a.time).localeCompare(String(b.time)));
+  const groups = [];
+
+  for (const event of sorted) {
+    const previous = groups.at(-1);
+    if (previous && shouldMergeTimelineEvents(previous, event)) {
+      previous.events.push(event);
+      previous.endTime = event.time;
+      previous.time = event.time;
+      previous.motionScore = Math.max(Number(previous.motionScore || 0), Number(event.motionScore || 0));
+      previous.notify = Boolean(previous.notify || event.notify);
+      previous.notificationText = previous.notificationText || event.notificationText || '';
+      previous.timelineText = summarizeTimelineGroup(previous.events);
+      continue;
+    }
+
+    groups.push({ ...event, startTime: event.time, endTime: event.time, events: [event] });
+  }
+
+  return groups;
+}
+
+function shouldMergeTimelineEvents(group, event) {
+  const last = group.events.at(-1);
+  if (!last) return false;
+  if (last.notify || event.notify) return false;
+  if (last.activityCategory !== event.activityCategory) return false;
+
+  const minutes = Math.abs(parseEventTime(event.time) - parseEventTime(last.time)) / 60000;
+  if (minutes > 12) return false;
+
+  const quietCategories = ['sleep', 'rest', 'not_visible', 'unknown'];
+  if (quietCategories.includes(event.activityCategory)) return true;
+
+  return normalizeTimelineText(last.timelineText) === normalizeTimelineText(event.timelineText);
+}
+
+function summarizeTimelineGroup(events) {
+  const latest = events.at(-1);
+  const text = latest.timelineText || '';
+  if (events.length < 2) return text;
+
+  const label = latest.activityLabel || categoryLabel(latest.activityCategory);
+  if (latest.activityCategory === 'sleep') return `${label}: 同じ場所で休んでいます。`;
+  if (latest.activityCategory === 'rest') return `${label}: しばらく同じ場所で過ごしています。`;
+  if (latest.activityCategory === 'not_visible') return `${label}: しばらく姿が確認しづらい状態です。`;
+  return text;
+}
+
+function normalizeTimelineText(text) {
+  return String(text || '')
+    .replace(/\d{1,2}:\d{2}/g, '')
+    .replace(/[。、.\s]/g, '')
+    .slice(0, 40);
+}
+
+function formatTimelineTime(event) {
+  if (event.startTime && event.endTime && event.startTime !== event.endTime) {
+    return `${formatEventTime(event.startTime)}〜${formatEventTime(event.endTime)}`;
+  }
+  return formatEventTime(event.time);
+}
+
+function parseEventTime(time) {
+  const normalized = String(time || '').replace(/T(\d{2})-(\d{2})-(\d{2})$/, 'T$1:$2:$3');
+  const parsed = Date.parse(normalized);
+  return Number.isFinite(parsed) ? parsed : 0;
 }
 
 function shouldShowCategoryBadge(category) {
