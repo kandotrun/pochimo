@@ -111,7 +111,7 @@ const server = http.createServer(async (req, res) => {
     if (user && url.pathname === '/login') return redirect(res, '/viewer');
 
     if (req.method === 'GET' && url.pathname === '/api/profile') {
-      return sendJson(res, 200, { ok: true, profile: authService.getPetProfile(user.id) });
+      return sendJson(res, 200, { ok: true, profile: authService.getPetProfile(user.id, user.householdId) });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/invites') {
@@ -124,10 +124,10 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/profile') {
       const body = JSON.parse(await parseBody(req, 3 * 1024 * 1024));
-      return sendJson(res, 200, { ok: true, profile: authService.savePetProfile(user.id, body) });
+      return sendJson(res, 200, { ok: true, profile: authService.savePetProfile(user.id, body, user.householdId) });
     }
 
-    const petProfile = user ? authService.getPetProfile(user.id) : null;
+    const petProfile = user ? authService.getPetProfile(user.id, user.householdId) : null;
     const hasPetName = Boolean(petProfile?.name?.trim());
     if (user && !hasPetName && !isProfileSetupPath(url.pathname)) {
       if (url.pathname.startsWith('/api/')) return sendJson(res, 400, { ok: false, error: 'pet name is required' });
@@ -412,7 +412,7 @@ async function createReportsForAllUsers(date) {
     const householdId = user.householdId || user.id;
     if (reportedHouseholds.has(householdId)) continue;
 
-    const profile = authService.getPetProfile(user.id);
+    const profile = authService.getPetProfile(user.id, householdId);
     if (!profile?.name?.trim()) continue;
     const result = await reportService.createReport(date, {
       useAi: true,

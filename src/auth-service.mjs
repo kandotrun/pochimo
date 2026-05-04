@@ -242,24 +242,41 @@ export class AuthService {
     `).all(userId);
   }
 
-  getPetProfile(userId) {
-    return this.db.prepare('SELECT name, photo, updated_at AS updatedAt FROM pet_profiles WHERE user_id = ?').get(userId)
-      || { name: '', photo: '', updatedAt: null };
+  getPetProfile(userId, householdId = userId) {
+    const own = this.db.prepare('SELECT name, photo, updated_at AS updatedAt FROM pet_profiles WHERE user_id = ?').get(userId);
+    if (own?.name?.trim()) return own;
+
+    const shared = this.db.prepare(`
+      SELECT pet_profiles.name, pet_profiles.photo, pet_profiles.updated_at AS updatedAt
+      FROM users
+      JOIN pet_profiles ON pet_profiles.user_id = users.id
+      WHERE users.household_id = ? AND pet_profiles.name != ''
+      ORDER BY users.id ASC
+      LIMIT 1
+    `).get(Number(householdId));
+
+    return shared || own || { name: '', photo: '', updatedAt: null };
   }
 
-  savePetProfile(userId, { name = '', photo = '' }) {
+  savePetProfile(userId, { name = '', photo = '' }, householdId = userId) {
     if (String(photo || '').length > 2_000_000) throw new Error('photo is too large');
 
-    this.db.prepare(`
+    const householdUsers = this.listHouseholdUsers(householdId);
+    const targetUserIds = householdUsers.length ? householdUsers.map(user => user.id) : [userId];
+    const stmt = this.db.prepare(`
       INSERT INTO pet_profiles (user_id, name, photo, updated_at)
       VALUES (?, ?, ?, CURRENT_TIMESTAMP)
       ON CONFLICT(user_id) DO UPDATE SET
         name = excluded.name,
         photo = excluded.photo,
         updated_at = CURRENT_TIMESTAMP
-    `).run(userId, String(name || '').trim(), String(photo || ''));
+    `);
 
-    return this.getPetProfile(userId);
+    for (const targetUserId of targetUserIds) {
+      stmt.run(targetUserId, String(name || '').trim(), String(photo || ''));
+    }
+
+    return this.getPetProfile(userId, householdId);
   }
 }
 
