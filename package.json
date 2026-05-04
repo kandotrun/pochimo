@@ -1,13 +1,15 @@
 {
-  "name": "pet-diary-ai",
-  "version": "0.1.0",
+  "name": "pochimo",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node server.mjs",
-    "start": "node server.mjs",
-    "report": "node scripts/generate-report.mjs"
+    "dev": "npm --prefix diary run dev",
+    "start": "npm --prefix diary run start",
+    "report": "npm --prefix diary run report"
   },
+  "workspaces": [
+    "diary"
+  ],
   "engines": {
     "node": ">=20"
   }

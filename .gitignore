@@ -1,14 +1,22 @@
 # runtime/private data
-data/
 .env
 .env.*
+*/.env
+*/.env.*
 !.env.example
+!*/.env.example
+data/
+*/data/
 
 # dependencies / build
 node_modules/
+*/node_modules/
 dist/
+*/dist/
 build/
+*/build/
 .next/
+*/.next/
 
 # OS/editor
 .DS_Store
