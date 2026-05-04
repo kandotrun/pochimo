@@ -11,7 +11,8 @@ chatForm.addEventListener('submit', async event => {
   appendMessage('user', prompt);
   chatInput.value = '';
   chatSubmit.disabled = true;
-  const pending = appendMessage('assistant', '記録を読んでいます...');
+  const pending = appendMessage('assistant', '');
+  const stopThinking = startThinkingAnimation(pending);
 
   try {
     const res = await fetch('/api/timeline/chat', {
@@ -21,8 +22,10 @@ chatForm.addEventListener('submit', async event => {
     });
     const json = await res.json();
     if (!res.ok || !json.ok) throw new Error(json.error || 'chat failed');
+    stopThinking();
     pending.innerHTML = renderAssistantReply(json);
   } catch (err) {
+    stopThinking();
     pending.textContent = 'うまく読み取れませんでした。少し時間を置いてもう一度聞いてください。';
   } finally {
     chatSubmit.disabled = false;
@@ -38,6 +41,31 @@ function appendMessage(role, text) {
   chatMessages.appendChild(node);
   chatMessages.scrollTop = chatMessages.scrollHeight;
   return node;
+}
+
+function startThinkingAnimation(node) {
+  const messages = [
+    '今日の記録を読み込んでいます',
+    '写真と行動の変化を見ています',
+    'ポテトが何をしていたか整理しています',
+    '関係ありそうな時間帯を探しています'
+  ];
+  let index = 0;
+
+  const render = () => {
+    node.classList.add('thinking');
+    node.innerHTML = `
+      <span class="thinking-text">${escapeHtml(messages[index % messages.length])}</span>
+      <span class="thinking-dots" aria-hidden="true"><i></i><i></i><i></i></span>`;
+    index += 1;
+  };
+
+  render();
+  const timer = setInterval(render, 1400);
+  return () => {
+    clearInterval(timer);
+    node.classList.remove('thinking');
+  };
 }
 
 function renderAssistantReply(json) {
