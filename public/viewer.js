@@ -455,9 +455,31 @@ function timelineHour(time) {
 }
 
 function applyTimelinePrompt(prompt) {
-  timelineMode = parseTimelinePrompt(prompt);
-  timelineModeLabel.textContent = timelineMode.label;
-  renderTimeline(latestEvents, { mode: timelineMode });
+  return askTimelineAi(prompt);
+}
+
+async function askTimelineAi(prompt) {
+  timelineModeLabel.textContent = 'AIに聞いています。記録を読み直しています。';
+  const previousMode = timelineMode;
+  timelineMode = { bucketMinutes: 3, importantOnly: false, label: timelineModeLabel.textContent };
+  try {
+    const res = await fetch('/api/timeline/chat', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ date: selectedDate, prompt })
+    });
+    const json = await res.json();
+    if (!res.ok || !json.ok) throw new Error(json.error || 'chat failed');
+    latestEvents = json.items?.length ? json.items : latestEvents;
+    timelineMode = { bucketMinutes: 3, importantOnly: false, label: json.reply || 'AIの返答に合わせて表示しています。' };
+    timelineModeLabel.textContent = timelineMode.label;
+    renderTimeline(latestEvents, { edited: true, mode: timelineMode });
+  } catch (err) {
+    timelineMode = parseTimelinePrompt(prompt);
+    if (timelineMode.label === parseTimelinePrompt('').label) timelineMode = previousMode;
+    timelineModeLabel.textContent = 'AIの返答に失敗しました。いまある記録から近い内容を表示しています。';
+    renderTimeline(latestEvents, { mode: timelineMode });
+  }
 }
 
 function shouldMergeTimelineEvents(group, event) {
@@ -629,13 +651,13 @@ dateInput.addEventListener('change', event => {
   if (event.target.value) setSelectedDate(event.target.value);
 });
 
-timelineChatForm.addEventListener('submit', event => {
+timelineChatForm.addEventListener('submit', async event => {
   event.preventDefault();
   const prompt = timelineChatInput.value.trim();
   if (!prompt) return;
   timelineChatSubmit.disabled = true;
-  applyTimelinePrompt(prompt);
-  setTimeout(() => { timelineChatSubmit.disabled = false; }, 180);
+  await applyTimelinePrompt(prompt);
+  timelineChatSubmit.disabled = false;
 });
 
 async function refreshReport() {

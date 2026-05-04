@@ -167,6 +167,18 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { ok: true, ...timeline });
     }
 
+    if (req.method === 'POST' && url.pathname === '/api/timeline/chat') {
+      enforceRateLimit(`timeline-chat:user:${user.id}`, 40, 15 * 60 * 1000);
+      const body = JSON.parse(await parseBody(req, 32 * 1024));
+      const date = body.date || todayJst();
+      const prompt = String(body.prompt || '').trim();
+      if (!prompt) return sendJson(res, 400, { ok: false, error: 'prompt is required' });
+      const events = await frameService.listEvents(date, user.id, user.householdId);
+      const profile = authService.getPetProfile(user.id, user.householdId);
+      const result = await aiClient.chatTimeline({ events, prompt, petName: profile.name || 'ペット' });
+      return sendJson(res, 200, { ok: true, ...enrichTimelineWithImages(result, events) });
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/latest') {
       const date = url.searchParams.get('date') || todayJst();
       const events = await frameService.listEvents(date, user.id, user.householdId);

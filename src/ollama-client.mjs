@@ -195,6 +195,84 @@ ${JSON.stringify(compactEvents)}`;
     }
   }
 
+  async chatTimeline({ events, prompt, petName = 'ペット' }) {
+    const fallback = createFallbackTimeline(events, petName);
+    if (!this.apiKey || !events.length) {
+      return { enabled: false, model: this.cloudReportModel, items: fallback, reply: '今日はまだ答えられる記録がありません。' };
+    }
+
+    const compactEvents = events.map(event => ({
+      time: event.time,
+      cameraLabel: event.cameraLabel || '',
+      activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
+      activityLabel: event.activityLabel || event.ai?.activityLabel || '',
+      petVisible: event.ai?.petVisible,
+      petActivity: event.ai?.petActivity || '',
+      scene: event.ai?.scene || '',
+      notify: Boolean(event.notify),
+      notificationText: event.notificationText || '',
+      timelineText: event.timelineText || '',
+      motionScore: Number(event.motionScore || 0)
+    }));
+
+    const userPrompt = String(prompt || '').trim().slice(0, 240);
+    const request = `ユーザーの質問: ${userPrompt}
+
+対象のペット名: ${petName}
+
+以下の記録だけを根拠に、質問へ自然な日本語で答えてください。
+該当しそうな記録があれば、その時間帯だけをタイムライン items に入れてください。
+「トイレしてた？」「リビングだけ」「玄関の動き」「夕方どうだった？」のような曖昧な質問でも、記録から判断してください。
+分からない場合は、分からないと短く言い、近い記録を示してください。
+監視ログっぽい言葉や内部用語は使わないでください。
+必ずJSONだけ返してください。
+
+形式:
+{
+  "reply": "ユーザーへの短い返答。最大2文。",
+  "items": [
+    {
+      "startTime": "YYYY-MM-DDTHH-MM-SS",
+      "endTime": "YYYY-MM-DDTHH-MM-SS",
+      "category": "sleep|eat|drink|toilet|play|mischief|near_owner|moving|rest|not_visible|unknown",
+      "label": "短い日本語ラベル",
+      "title": "タイムライン本文。${petName}を主語にした自然な1文",
+      "detail": "補足。不要なら空文字",
+      "importance": "low|normal|high",
+      "notify": true/false
+    }
+  ]
+}
+
+記録JSON:
+${JSON.stringify(compactEvents)}`;
+
+    try {
+      const data = await this.#chatCompletions({
+        model: this.cloudReportModel,
+        messages: [
+          { role: 'system', content: 'あなたは「ぽちも日報」のチャットAIです。ペットの一日記録を読み、家族に分かる言葉で答えます。' },
+          { role: 'user', content: request }
+        ],
+        temperature: 0.2,
+        max_tokens: 1600
+      });
+
+      const raw = data.choices?.[0]?.message?.content || '';
+      const parsed = extractJson(raw);
+      const items = normalizeTimelineItems(parsed.items, events);
+      return {
+        enabled: true,
+        model: this.cloudReportModel,
+        reply: String(parsed.reply || '').trim() || '近い記録を表示しました。',
+        items: items.length ? items : fallback.slice(0, 8),
+        raw: String(raw).trim()
+      };
+    } catch (err) {
+      return { enabled: false, model: this.cloudReportModel, items: fallback.slice(0, 8), reply: `AIの返答生成に失敗しました。近い記録を表示します。` };
+    }
+  }
+
   async #tryCloudVision(images, petName) {
     try {
       const content = [
