@@ -204,23 +204,9 @@ button:disabled { opacity: .5; cursor: not-allowed; }
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 8px;
-  margin: 0 0 10px;
+  margin: 0 0 14px;
 }
 .timeline-chat input { width: 100%; }
-.timeline-suggestions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin: -2px 0 14px;
-}
-.timeline-suggestions button {
-  min-height: 34px;
-  padding: 0 12px;
-  border-color: var(--brand-border);
-  background: var(--brand-soft);
-  color: var(--accent-foreground);
-  font-size: 13px;
-}
 .date-nav {
   display: grid;
   grid-template-columns: 44px minmax(0, 1fr) 44px;

@@ -638,14 +638,6 @@ timelineChatForm.addEventListener('submit', event => {
   setTimeout(() => { timelineChatSubmit.disabled = false; }, 180);
 });
 
-document.querySelectorAll('[data-timeline-prompt]').forEach(button => {
-  button.addEventListener('click', () => {
-    const prompt = button.dataset.timelinePrompt || '';
-    timelineChatInput.value = prompt;
-    applyTimelinePrompt(prompt);
-  });
-});
-
 async function refreshReport() {
   try {
     const res = await fetch(`/api/report?date=${encodeURIComponent(selectedDate)}`);
