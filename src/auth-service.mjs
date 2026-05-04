@@ -16,6 +16,7 @@ export class AuthService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
+        household_id INTEGER,
         created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS sessions (
@@ -43,6 +44,14 @@ export class AuthService {
       );
       CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
     `);
+
+    this.#ensureColumn('users', 'household_id', 'INTEGER');
+    this.db.prepare('UPDATE users SET household_id = id WHERE household_id IS NULL').run();
+  }
+
+  #ensureColumn(table, column, definition) {
+    const columns = this.db.prepare(`PRAGMA table_info(${table})`).all().map(item => item.name);
+    if (!columns.includes(column)) this.db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${definition}`);
   }
 
   hasUsers() {
@@ -60,34 +69,41 @@ export class AuthService {
 
   createUserWithInvite({ username, password, inviteCode }) {
     validateInviteCode(inviteCode);
-    const invite = this.db.prepare('SELECT code, used_by FROM invites WHERE code = ?').get(inviteCode.trim());
+    const invite = this.db.prepare(`
+      SELECT invites.code, invites.used_by, users.household_id AS householdId
+      FROM invites
+      JOIN users ON users.id = invites.created_by
+      WHERE invites.code = ?
+    `).get(inviteCode.trim());
     if (!invite || invite.used_by) throw new Error('invalid invite code');
 
-    const user = this.#createUser({ username, password });
+    const user = this.#createUser({ username, password, householdId: invite.householdId });
     this.db.prepare('UPDATE invites SET used_by = ?, used_at = CURRENT_TIMESTAMP WHERE code = ?').run(user.id, invite.code);
     return user;
   }
 
-  #createUser({ username, password }) {
+  #createUser({ username, password, householdId = null }) {
     validateUsername(username);
     validatePassword(password);
 
     const passwordHash = hashPassword(password);
-    const result = this.db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(username.trim(), passwordHash);
-    return { id: Number(result.lastInsertRowid), username: username.trim() };
+    const result = this.db.prepare('INSERT INTO users (username, password_hash, household_id) VALUES (?, ?, ?)').run(username.trim(), passwordHash, householdId);
+    const id = Number(result.lastInsertRowid);
+    if (householdId == null) this.db.prepare('UPDATE users SET household_id = ? WHERE id = ?').run(id, id);
+    return { id, username: username.trim(), householdId: householdId || id };
   }
 
   login({ username, password }) {
     validateUsername(username);
     validatePassword(password);
 
-    const user = this.db.prepare('SELECT id, username, password_hash FROM users WHERE username = ?').get(username.trim());
+    const user = this.db.prepare('SELECT id, username, password_hash, household_id AS householdId FROM users WHERE username = ?').get(username.trim());
     if (!user || !verifyPassword(password, user.password_hash)) throw new Error('invalid username or password');
 
     const token = randomBytes(32).toString('base64url');
     const expiresAt = Date.now() + SESSION_DAYS * 24 * 60 * 60 * 1000;
     this.db.prepare('INSERT INTO sessions (token, user_id, expires_at) VALUES (?, ?, ?)').run(token, user.id, expiresAt);
-    return { token, expiresAt, user: { id: user.id, username: user.username } };
+    return { token, expiresAt, user: { id: user.id, username: user.username, householdId: user.householdId } };
   }
 
   logout(token) {
@@ -100,7 +116,7 @@ export class AuthService {
     this.db.prepare('DELETE FROM sessions WHERE expires_at < ?').run(Date.now());
 
     return this.db.prepare(`
-      SELECT users.id, users.username
+      SELECT users.id, users.username, users.household_id AS householdId
       FROM sessions
       JOIN users ON users.id = sessions.user_id
       WHERE sessions.token = ? AND sessions.expires_at > ?

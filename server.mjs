@@ -103,30 +103,30 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === 'POST' && url.pathname === '/api/capture') {
       const body = JSON.parse(await parseBody(req));
-      const result = await frameService.saveCapture(body, user.id);
+      const result = await frameService.saveCapture(body, user.id, user.householdId);
       analyzeEventInBackground(result.event, body.image, petProfile.name);
       return sendJson(res, 200, { ok: true, ...result });
     }
 
     if (req.method === 'GET' && url.pathname === '/api/events') {
       const date = url.searchParams.get('date') || todayJst();
-      return sendJson(res, 200, await frameService.listEvents(date, user.id));
+      return sendJson(res, 200, await frameService.listEvents(date, user.id, user.householdId));
     }
 
     if (req.method === 'GET' && url.pathname === '/api/latest') {
       const date = url.searchParams.get('date') || todayJst();
-      const events = await frameService.listEvents(date, user.id);
+      const events = await frameService.listEvents(date, user.id, user.householdId);
       const latest = [...events].reverse().find(event => event.file);
       return sendJson(res, 200, latest ? { ok: true, event: latest, imageUrl: `/${latest.file}` } : { ok: true, event: null, imageUrl: null });
     }
 
     if (req.method === 'GET' && url.pathname.startsWith('/data/frames/')) {
-      return serveFrame(url.pathname, res, user.id);
+      return serveFrame(url.pathname, res, user.id, user.householdId);
     }
 
     if (req.method === 'GET' && url.pathname === '/api/report') {
       const date = url.searchParams.get('date') || todayJst();
-      const saved = await reportService.getReport(date, { userId: user.id });
+      const saved = await reportService.getReport(date, { userId: user.id, householdId: user.householdId });
       return sendJson(res, 200, { ok: true, ...saved });
     }
 
@@ -165,7 +165,7 @@ async function analyzeEventInBackground(event, imageDataUrl, petName = 'ペッ�
   });
 }
 
-async function serveFrame(pathname, res, userId) {
+async function serveFrame(pathname, res, userId, householdId) {
   const relative = pathname.replace(/^\/data\/frames\//, '');
   const filePath = path.normalize(path.join(paths.framesDir, relative));
 
@@ -176,7 +176,7 @@ async function serveFrame(pathname, res, userId) {
   }
 
   const eventFile = `data/frames/${relative}`;
-  const event = await frameService.findEventByFile(eventFile, userId);
+  const event = await frameService.findEventByFile(eventFile, userId, householdId);
   if (!event) {
     res.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
     res.end('Not found');
@@ -264,6 +264,7 @@ async function createReportsForAllUsers(date) {
     await reportService.createReport(date, {
       useAi: true,
       userId: user.id,
+      householdId: user.householdId,
       petName: profile.name
     });
   }

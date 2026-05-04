@@ -9,7 +9,7 @@ export class FrameService {
     this.framesDir = framesDir;
   }
 
-  async saveCapture(body, userId) {
+  async saveCapture(body, userId, householdId = userId) {
     if (!body.image?.startsWith('data:image/jpeg;base64,')) {
       throw new Error('image must be jpeg data url');
     }
@@ -27,6 +27,7 @@ export class FrameService {
       time: stamp,
       file: `data/frames/${date}/${filename}`,
       userId: Number(userId),
+      householdId: Number(householdId),
       motionScore: Number(body.motionScore || 0),
       cameraLabel: body.cameraLabel || 'browser-camera',
       note: body.note || ''
@@ -40,16 +41,19 @@ export class FrameService {
     return { event, count: events.length };
   }
 
-  async listEvents(date = todayJst(), userId = null) {
+  async listEvents(date = todayJst(), userId = null, householdId = userId) {
     const events = await readJson(path.join(this.dataDir, `${date}.events.json`), []);
     if (userId == null) return events;
-    return events.filter(event => Number(event.userId) === Number(userId));
+    return events.filter(event => {
+      if (event.householdId != null) return Number(event.householdId) === Number(householdId);
+      return Number(event.userId) === Number(userId) || Number(event.userId) === Number(householdId);
+    });
   }
 
-  async findEventByFile(file, userId) {
+  async findEventByFile(file, userId, householdId = userId) {
     const date = String(file || '').match(/data\/frames\/(\d{4}-\d{2}-\d{2})\//)?.[1];
     if (!date) return null;
-    const events = await this.listEvents(date, userId);
+    const events = await this.listEvents(date, userId, householdId);
     return events.find(event => event.file === file) || null;
   }
 

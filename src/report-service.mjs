@@ -17,9 +17,9 @@ export class ReportService {
     this.aiClient = aiClient;
   }
 
-  async getReport(date = todayJst(), { userId = null } = {}) {
-    const jsonPath = this.#reportJsonPath(date, userId);
-    const markdownPath = this.#reportMarkdownPath(date, userId);
+  async getReport(date = todayJst(), { userId = null, householdId = userId } = {}) {
+    const jsonPath = this.#reportJsonPath(date, householdId);
+    const markdownPath = this.#reportMarkdownPath(date, householdId);
     if (!await fileExists(jsonPath) || !await fileExists(markdownPath)) {
       return { exists: false, report: null, markdown: '' };
     }
@@ -31,8 +31,8 @@ export class ReportService {
     };
   }
 
-  async createReport(date = todayJst(), { useAi = true, userId = null, petName = 'ペット' } = {}) {
-    const events = await this.#readEvents(date, userId);
+  async createReport(date = todayJst(), { useAi = true, userId = null, householdId = userId, petName = 'ペット' } = {}) {
+    const events = await this.#readEvents(date, userId, householdId);
     const metrics = this.#buildMetrics(events);
     const ai = useAi && events.length > 0
       ? await this.#analyzeRepresentativeFrames(events, petName)
@@ -51,16 +51,19 @@ export class ReportService {
     };
 
     const markdown = cloud.markdown || fallbackMarkdown;
-    await writeJson(this.#reportJsonPath(date, userId), report);
-    await fs.writeFile(this.#reportMarkdownPath(date, userId), markdown);
+    await writeJson(this.#reportJsonPath(date, householdId), report);
+    await fs.writeFile(this.#reportMarkdownPath(date, householdId), markdown);
 
     return { report, markdown };
   }
 
-  async #readEvents(date, userId = null) {
+  async #readEvents(date, userId = null, householdId = userId) {
     const events = await readJson(path.join(this.dataDir, `${date}.events.json`), []);
     if (userId == null) return events;
-    return events.filter(event => Number(event.userId) === Number(userId));
+    return events.filter(event => {
+      if (event.householdId != null) return Number(event.householdId) === Number(householdId);
+      return Number(event.userId) === Number(userId) || Number(event.userId) === Number(householdId);
+    });
   }
 
   #buildMetrics(events) {
