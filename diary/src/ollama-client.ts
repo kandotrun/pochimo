@@ -491,10 +491,13 @@ ${JSON.stringify(compactEvents)}`;
         if (response.ok) return response.json();
 
         const errorText = await response.text();
-        lastError = new Error(`Ollama Cloud HTTP ${response.status}: ${errorText}`);
-        if (![429, 500, 502, 503, 504].includes(response.status)) throw lastError;
+        lastError = Object.assign(new Error(`Ollama Cloud HTTP ${response.status}: ${errorText}`), {
+          retryable: [429, 500, 502, 503, 504].includes(response.status),
+        });
+        if (!(lastError as Error & { retryable?: boolean }).retryable) throw lastError;
       } catch (err) {
         lastError = err;
+        if ((err as Error & { retryable?: boolean }).retryable === false) throw err;
       }
 
       if (attempt < maxAttempts) await sleep(1000 * attempt);

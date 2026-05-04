@@ -32,6 +32,19 @@ describe("AuthService", () => {
     });
   });
 
+  test("rejects weak passwords and bad login credentials", async () => {
+    const auth = await newAuthService();
+
+    expect(() => auth.createFirstUser({ username: "kan@example.com", password: "short" })).toThrow(
+      "password must be at least 8 characters",
+    );
+
+    auth.createFirstUser({ username: "kan@example.com", password: "password123" });
+    expect(() => auth.login({ username: "kan@example.com", password: "wrongpass" })).toThrow(
+      "invalid username or password",
+    );
+  });
+
   test("invite user joins creator household", async () => {
     const auth = await newAuthService();
 
@@ -50,6 +63,18 @@ describe("AuthService", () => {
     ]);
   });
 
+  test("invite cannot be reused", async () => {
+    const auth = await newAuthService();
+
+    const owner = auth.createFirstUser({ username: "owner@example.com", password: "password123" });
+    const invite = auth.createInvite(owner.id);
+    auth.createUserWithInvite({ username: "member@example.com", password: "password123", inviteCode: invite.code });
+
+    expect(() =>
+      auth.createUserWithInvite({ username: "other@example.com", password: "password123", inviteCode: invite.code }),
+    ).toThrow("invalid invite code");
+  });
+
   test("email login code requires invite after bootstrap", async () => {
     const auth = await newAuthService();
 
@@ -57,6 +82,36 @@ describe("AuthService", () => {
     const skipped = auth.createEmailLoginCode({ email: "new@example.com" });
 
     expect(skipped).toMatchObject({ email: "new@example.com", code: "", skipped: true });
+  });
+
+  test("email login code creates first account and is single-use", async () => {
+    const auth = await newAuthService();
+    const loginCode = auth.createEmailLoginCode({ email: " Kan@Example.COM " });
+
+    const session = auth.verifyEmailLoginCode({ email: "kan@example.com", code: loginCode.code });
+
+    expect(session.user.username).toBe("kan@example.com");
+    expect(auth.getUserByToken(session.token)).toMatchObject({ username: "kan@example.com" });
+    expect(() => auth.verifyEmailLoginCode({ email: "kan@example.com", code: loginCode.code })).toThrow(
+      "invalid or expired code",
+    );
+  });
+
+  test("pet profile and settings are shared at household scope", async () => {
+    const auth = await newAuthService();
+    const owner = auth.createFirstUser({ username: "owner@example.com", password: "password123" });
+    const invite = auth.createInvite(owner.id);
+    const member = auth.createUserWithInvite({
+      username: "member@example.com",
+      password: "password123",
+      inviteCode: invite.code,
+    });
+
+    auth.savePetProfile(owner.id, { name: "ポテト", photo: "data:image/jpeg;base64,/9j/" }, owner.householdId);
+    auth.saveHouseholdSettings(owner.householdId, { mischiefEmailEnabled: false });
+
+    expect(auth.getPetProfile(member.id, member.householdId)).toMatchObject({ name: "ポテト" });
+    expect(auth.getHouseholdSettings(member.householdId).mischiefEmailEnabled).toBe(false);
   });
 
   test("cookie helpers parse and emit secure session cookie", () => {
