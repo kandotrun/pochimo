@@ -76,9 +76,9 @@ body {
   align-items: flex-start;
   justify-content: space-between;
   margin-bottom: 20px;
-  padding: 18px;
-  border: 1px solid var(--brand-border);
-  border-radius: var(--radius);
+  padding: 6px 0 10px;
+  border: 0;
+  border-radius: 0;
   background: transparent;
 }
 .eyebrow {
