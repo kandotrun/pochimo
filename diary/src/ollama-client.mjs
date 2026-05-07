@@ -127,12 +127,13 @@ ${fallbackMarkdown}`;
   }
 
   async createTimeline({ events, petName = 'ペット' }) {
-    const fallback = createFallbackTimeline(events, petName);
+    const sourceEvents = selectTimelineSourceEvents(events, 160);
+    const fallback = createFallbackTimeline(sourceEvents, petName);
     if (!this.apiKey || !events.length) {
       return { enabled: false, model: this.cloudReportModel, items: fallback, summary: 'API keyなし、またはイベントなし' };
     }
 
-    const compactEvents = events.map(event => ({
+    const compactEvents = sourceEvents.map(event => ({
       time: event.time,
       activityCategory: event.activityCategory || event.ai?.activityCategory || 'unknown',
       activityLabel: event.activityLabel || event.ai?.activityLabel || '',
@@ -472,7 +473,25 @@ function createFallbackTimeline(events, petName = 'ペット') {
     });
   }
 
-  return bucketTimelineItems(groups.map(({ events: _events, ...item }) => item), petName);
+  const summarized = bucketTimelineItems(groups.map(({ events: _events, ...item }) => item), petName);
+  return selectRepresentativeGroups(summarized, 12);
+}
+
+function selectTimelineSourceEvents(events, max = 160) {
+  if (events.length <= max) return events;
+  const meaningful = events.filter(event => {
+    const category = event.activityCategory || event.ai?.activityCategory || 'unknown';
+    return Boolean(event.notify) || event.ai?.petVisible === true || !['unknown', 'not_visible'].includes(category);
+  });
+  if (meaningful.length <= max) return meaningful;
+  const step = meaningful.length / max;
+  return Array.from({ length: max }, (_, index) => meaningful[Math.floor(index * step)]).filter(Boolean);
+}
+
+function selectRepresentativeGroups(groups, max = 12) {
+  if (groups.length <= max) return groups;
+  const step = groups.length / max;
+  return Array.from({ length: max }, (_, index) => groups[Math.floor(index * step)]).filter(Boolean);
 }
 
 function bucketTimelineItems(items, petName = 'ペット') {
